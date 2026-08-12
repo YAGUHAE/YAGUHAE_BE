@@ -9,7 +9,7 @@
 | 런타임 | Node.js 24, pnpm 10 |
 | 프레임워크 | NestJS 11 (전역 prefix `api/v1`) |
 | DB | PostgreSQL 16, TypeORM (마이그레이션 기반, `synchronize: false`) |
-| 배포 | Docker, GitHub Actions, GHCR, AWS EC2 |
+| 배포 | Docker, Nginx(리버스 프록시), GitHub Actions, GHCR, AWS EC2 |
 
 ## 로컬 실행
 
@@ -50,6 +50,14 @@ pnpm migration:revert                                    # 직전 마이그레�
 
 - **CI** (`.github/workflows/ci.yml`) — `dev`/`main` 대상 PR·푸시에서 포맷·린트·빌드·단위/e2e 테스트와 Docker 이미지 빌드를 검증합니다.
 - **CD** (`.github/workflows/cd.yml`) — `main` 푸시 시 이미지를 GHCR에 푸시하고 EC2에 배포한 뒤 헬스체크로 검증합니다. `dev`는 CI 검증까지만 수행합니다.
+
+운영 환경은 EC2 한 대에서 compose로 `postgres` → `migration` → `app` → `nginx` 순서로 기동되며, 외부에 노출되는 것은 nginx(80)뿐입니다.
+
+```
+외부 ──80──→ nginx ──4000──→ app ──5432──→ postgres
+```
+
+nginx 설정은 [`nginx/conf.d/default.conf`](nginx/conf.d/default.conf)에서 버전 관리되고 배포 시 함께 전송됩니다.
 
 서버 준비 절차, 필요한 GitHub Secrets, 롤백 방법은 [`docs/배포 가이드.md`](docs/배포%20가이드.md)를 참고하세요.
 
