@@ -78,9 +78,10 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
-          source: |
-            docker-compose.prod.yml
-            nginx/conf.d/default.conf
+          # scp-action v1.0.0이 쓰는 drone-scp는 source를 콤마로만 분리한다.
+          # 줄바꿈으로 나열하면 한 경로로 합쳐져 매칭되는 파일이 없고
+          # "tar: Cowardly refusing to create an empty archive" 로 실패한다.
+          source: docker-compose.prod.yml,nginx/conf.d/default.conf
           target: ${{ vars.DEPLOY_PATH || '~/yaguhae' }}
 
       - name: SSH 접속 후 배포
