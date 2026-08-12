@@ -53,3 +53,5 @@ pids
 
 # Local tool state
 .omc/
+.claude/
+.vscode/
