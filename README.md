@@ -46,8 +46,10 @@ pnpm migration:revert                                    # 직전 마이그레�
 
 ## CI/CD
 
+브랜치 전략은 `dev`(개발 통합) → `main`(배포)입니다.
+
 - **CI** (`.github/workflows/ci.yml`) — `dev`/`main` 대상 PR·푸시에서 포맷·린트·빌드·단위/e2e 테스트와 Docker 이미지 빌드를 검증합니다.
-- **CD** (`.github/workflows/cd.yml`) — `dev` 푸시 시 이미지를 GHCR에 푸시하고 EC2에 배포한 뒤 헬스체크로 검증합니다.
+- **CD** (`.github/workflows/cd.yml`) — `main` 푸시 시 이미지를 GHCR에 푸시하고 EC2에 배포한 뒤 헬스체크로 검증합니다. `dev`는 CI 검증까지만 수행합니다.
 
 서버 준비 절차, 필요한 GitHub Secrets, 롤백 방법은 [`docs/배포 가이드.md`](docs/배포%20가이드.md)를 참고하세요.
 
