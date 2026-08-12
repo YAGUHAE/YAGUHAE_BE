@@ -100,7 +100,8 @@ jobs:
           script_stop: true
           script: |
             set -e
-            cd "$DEPLOY_PATH"
+            # bash는 변수 확장 결과의 ~ 를 홈 디렉터리로 펼치지 않으므로 직접 치환한다.
+            cd "${DEPLOY_PATH/#\~/$HOME}"
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
@@ -129,7 +130,8 @@ jobs:
           envs: DEPLOY_PATH
           script_stop: true
           script: |
-            cd "$DEPLOY_PATH"
+            # bash는 변수 확장 결과의 ~ 를 홈 디렉터리로 펼치지 않으므로 직접 치환한다.
+            cd "${DEPLOY_PATH/#\~/$HOME}"
             HTTP_PORT="$(grep -E '^HTTP_PORT=' .env | cut -d= -f2)"
             HTTP_PORT="${HTTP_PORT:-80}"
 
