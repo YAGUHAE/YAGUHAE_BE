@@ -1,0 +1,22 @@
+# Dependabot 설정. PR은 저장소 기본 브랜치(dev)를 대상으로 열린다.
+# 참고: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-reference
+version: 2
+
+updates:
+  # 워크플로우에서 사용하는 GitHub Actions 버전 업데이트
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Seoul
+    # 커밋 메시지를 CONTRIBUTING.md 의 `<type>: <설명>` 컨벤션에 맞춘다.
+    commit-message:
+      prefix: chore
+    # 액션 업데이트를 하나의 PR로 묶어 리뷰 부담을 줄인다.
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 5
