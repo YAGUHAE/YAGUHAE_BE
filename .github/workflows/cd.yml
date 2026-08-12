@@ -24,17 +24,17 @@ jobs:
 
     steps:
       - name: 소스 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 이미지 이름 계산 (GHCR은 소문자만 허용)
         id: image-name
         run: echo "image=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Buildx 설정
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: GHCR 로그인
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -42,7 +42,7 @@ jobs:
 
       - name: 태그/라벨 생성
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ steps.image-name.outputs.image }}
           tags: |
@@ -50,7 +50,7 @@ jobs:
             type=sha,format=long
 
       - name: 빌드 & 푸시
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -69,10 +69,10 @@ jobs:
 
     steps:
       - name: 소스 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: compose 파일 & nginx 설정 서버로 전송
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -84,7 +84,7 @@ jobs:
           target: ${{ vars.DEPLOY_PATH || '~/yaguhae' }}
 
       - name: SSH 접속 후 배포
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           APP_IMAGE: ${{ needs.build-and-push.outputs.image }}:sha-${{ github.sha }}
           GHCR_USER: ${{ github.actor }}
@@ -117,7 +117,7 @@ jobs:
             docker logout ghcr.io
 
       - name: 배포 헬스체크
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '~/yaguhae' }}
         with:
