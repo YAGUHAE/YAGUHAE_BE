@@ -1,0 +1,69 @@
+# EC2 운영 서버용 compose 파일.
+# CD 워크플로우가 이 파일과 .env를 서버로 전송한 뒤 pull & up 을 실행한다.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yaguhae-postgres
+    restart: unless-stopped
+    # 운영 DB는 호스트 포트를 열지 않고 compose 내부 네트워크로만 접근한다.
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - yaguhae_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # 앱보다 먼저 1회 실행되고 종료되는 마이그레이션 전용 서비스
+  migration:
+    image: ${APP_IMAGE}
+    container_name: yaguhae-migration
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      NODE_ENV: production
+    command: ['node_modules/.bin/typeorm', 'migration:run', '-d', 'dist/database/data-source.js']
+
+  app:
+    image: ${APP_IMAGE}
+    container_name: yaguhae-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      NODE_ENV: production
+      PORT: 4000
+    ports:
+      - '${APP_PORT:-4000}:4000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/api/v1/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  yaguhae_pgdata:

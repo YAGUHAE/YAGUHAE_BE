@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { buildDataSourceOptions } from './database/typeorm.config';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { buildDataSourceOptions } from './database/typeorm.config';
           nodeEnv: configService.get<string>('NODE_ENV', 'development'),
         }),
     }),
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

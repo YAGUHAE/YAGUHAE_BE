@@ -1,0 +1,139 @@
+name: CD
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    name: 이미지 빌드 & GHCR 푸시
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image-name.outputs.image }}
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 이미지 이름 계산 (GHCR은 소문자만 허용)
+        id: image-name
+        run: echo "image=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Buildx 설정
+        uses: docker/setup-buildx-action@v3
+
+      - name: GHCR 로그인
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 태그/라벨 생성
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image-name.outputs.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: 빌드 & 푸시
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: EC2 배포
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: compose 파일 서버로 전송
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          source: docker-compose.prod.yml
+          target: ${{ vars.DEPLOY_PATH || '~/yaguhae' }}
+
+      - name: SSH 접속 후 배포
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          APP_IMAGE: ${{ needs.build-and-push.outputs.image }}:sha-${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '~/yaguhae' }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          envs: APP_IMAGE,GHCR_USER,GHCR_TOKEN,DEPLOY_PATH
+          script_stop: true
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            # 셸 환경변수가 .env 의 APP_IMAGE 보다 우선 적용된다.
+            export APP_IMAGE
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            docker image prune -f
+            docker logout ghcr.io
+
+      - name: 배포 헬스체크
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '~/yaguhae' }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          envs: DEPLOY_PATH
+          script_stop: true
+          script: |
+            cd "$DEPLOY_PATH"
+            APP_PORT="$(grep -E '^APP_PORT=' .env | cut -d= -f2)"
+            APP_PORT="${APP_PORT:-4000}"
+
+            for i in $(seq 1 20); do
+              if curl -fsS "http://127.0.0.1:${APP_PORT}/api/v1/health/ready" > /dev/null; then
+                echo "헬스체크 성공"
+                exit 0
+              fi
+              echo "헬스체크 대기 중... ($i/20)"
+              sleep 5
+            done
+
+            echo "헬스체크 실패. 최근 로그를 출력합니다."
+            docker compose -f docker-compose.prod.yml logs --tail 100 app
+            exit 1
