@@ -1,0 +1,7 @@
+echo "🔍 Running ESLint..."
+pnpm exec eslint "{src,apps,libs,test}/**/*.ts" --fix
+
+echo "🎨 Running Prettier..."
+pnpm exec prettier --write "src/**/*.ts" "test/**/*.ts"
+
+echo "✅ Pre-commit checks passed!"

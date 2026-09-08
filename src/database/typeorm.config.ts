@@ -20,7 +20,7 @@ export function buildDataSourceOptions(env: DatabaseEnv): DataSourceOptions {
     database: env.database,
     entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
     migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
-    synchronize: false,
+    synchronize: false, // 개발 모드일 때는 true, 프로덕션일 때는 false
     logging: env.nodeEnv !== 'production',
   };
 }

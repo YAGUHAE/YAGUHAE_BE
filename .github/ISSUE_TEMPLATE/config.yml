@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: 📚 문서 보기
+    url: https://github.com/YAGUHAE/YAGUHAE-BE/wiki
+    about: 프로젝트 문서와 가이드를 확인하세요
+  - name: 💬 토론
+    url: https://github.com/YAGUHAE/YAGUHAE-BE/discussions
+    about: 아이디어나 질문을 공유하세요

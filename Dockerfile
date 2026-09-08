@@ -20,7 +20,9 @@ FROM node:24-alpine AS prod-deps
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+# husky 등 devDependencies 전용 prepare 스크립트가 --prod 설치에서 실행되면
+# "husky: not found" 로 실패하므로 런타임 의존성 단계에서는 스크립트를 건너뛴다.
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # 4) 런타임
 FROM node:24-alpine AS runner
