@@ -45,8 +45,13 @@ export class League extends BaseEntity {
    * 예약 시 reservations.total_fee로 다시 고정된다. 나중에 바꿔도 소급되지 않는다.
    *
    * DB 기본값이 '{}'이므로 비어 있는 상태가 표현 가능하다 → Partial.
+   *
+   * 기본값에 ::jsonb 캐스트를 붙이지 않는다. 컬럼 타입이 jsonb라 Postgres가
+   * 어차피 '{}'::jsonb로 저장하는데, 캐스트를 명시하면 TypeORM이 DB에서 읽은
+   * 값과 문자열 비교에 실패해 migration:generate가 매번 의미 없는
+   * ALTER COLUMN SET DEFAULT 를 만들어낸다.
    */
-  @Column({ type: 'jsonb', name: 'default_fees', default: () => "'{}'::jsonb" })
+  @Column({ type: 'jsonb', name: 'default_fees', default: () => "'{}'" })
   defaultFees: Partial<Record<FeeTier, number>>;
 
   @OneToMany(() => Game, (game) => game.league)
