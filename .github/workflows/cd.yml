@@ -107,6 +107,18 @@ jobs:
 
             # 셸 환경변수가 .env 의 APP_IMAGE 보다 우선 적용된다.
             export APP_IMAGE
+
+            # 배포한 태그를 .env 에도 남긴다.
+            # 이 줄이 없으면 .env 는 초기값 :latest 에 머물러, 서버에서 수동으로
+            # docker compose up 을 실행할 때 로컬에 없는 태그를 pull 하려 든다.
+            # 배포 스크립트는 마지막에 docker logout 하므로 그 pull 은 반드시
+            # unauthorized 로 실패한다.
+            if grep -q '^APP_IMAGE=' .env; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${APP_IMAGE}|" .env
+            else
+              echo "APP_IMAGE=${APP_IMAGE}" >> .env
+            fi
+
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
