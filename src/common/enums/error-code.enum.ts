@@ -17,6 +17,10 @@ export enum ErrorCode {
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 
   // --- auth ---
+  /** 이메일 또는 비밀번호 불일치. 어느 쪽이 틀렸는지 구분하지 않는다 */
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  /** users.is_suspended = true (노쇼 2회) */
+  USER_SUSPENDED = 'USER_SUSPENDED',
   /** refresh 토큰이 없거나 서명·만료·무효화 검증에 실패 */
   INVALID_REFRESH_TOKEN = 'INVALID_REFRESH_TOKEN',
   /** PLAYER·HOST refresh 쿠키가 둘 다 있어 어느 세션을 갱신할지 정할 수 없음 */
