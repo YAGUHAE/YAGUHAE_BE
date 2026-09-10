@@ -4,9 +4,10 @@
 
 > **문서 정보**
 > 
-> - **최종 수정일:** 2026-09-08
+> - **최종 수정일:** 2026-09-10
 > - **기반 문서:** ERD + 상태머신 (NestJS + TypeORM 재정비판 v5) · **API 명세 v6** · 화면설계서(용병 v1 · 리그 어드민 v2.1) · 라우팅 설계 v1
 > - **변경 배경:** API 명세가 v6으로 개정되면서(화면설계서 동기화) **스키마가 뒷받침하지 못하는 계약이 생겼음.** 자리마다 참가자 이름을 받고, 종료된 예약의 자리를 보존하고, 상태 이력 타임라인을 그리고, 자리 단위로 출석을 찍는 화면들이 확정됐으나 담을 컬럼이 없었음. 또한 HOST 이메일 로그인·refresh 토큰 무효화·알림톡 발송이 명세에는 있으나 `users`에 비밀번호·전화번호가 없고 토큰 저장소가 없어 **인증 경로 자체가 스키마상 성립하지 않았음**
+> - **v6 정정 이력:** 2026-09-10 — §2.9 알림 발송 위치 (§0.1.1)
 > - **v5 대비 주요 변경:** 신규 테이블 3개(`reservation_status_history` · `reservation_slot_snapshot` · `refresh_tokens`), `game_position_slot`에 `seq`·`participant_name`·`attendance` 추가, `FeeTier`·`RejectReason`·`AttendanceResult`·`HistoryActor` enum 신설, **급수 제한 폐지**(`games.required_level` → `recommended_level`, 검증 삭제), 승인·거절 가능 상태에 `RESERVED` 추가, `games.stadium_name` 부활(nullable override), `leagues.bank_id` nullable화
 
 > **v4 (복수 자리 예약) 변경 이력**
@@ -51,6 +52,19 @@
 > 1. **`participant_name`이 `users`와 연결되지 않습니다.** 대리 신청 대상은 계정이 없어도 되므로 이름 문자열만 저장합니다. 따라서 평가(§4.3)는 각 예약의 `seq = 0`인 자리(예약자 본인)만 대상이고, 노쇼 카운트도 **예약자 1인에게만** 누적됩니다. 화면설계서 §3.2가 의도한 트레이드오프("데려온 사람이 책임진다")이며, 동반자 개별 제재가 필요해지면 슬롯에 nullable `user_id`를 추가하는 확장 경로가 남아 있습니다.
 > 2. **`banks` 소유권 문제는 그대로입니다** (§0.4에서 넘어옴). `leagues.bank_id`가 nullable이 되면서 "계좌 없는 리그"가 정상 상태가 됐고, 경기 개설 시점에만 계좌를 요구합니다 — 이 검증은 스키마가 아니라 서비스 레이어(`LEAGUE_BANK_REQUIRED`)에 있습니다.
 > 3. **`game_position_slot`이 컬럼 4개에서 7개로 늘었습니다.** 점유 상태(`reservation_id`·`claimed_at`·`seq`·`participant_name`)와 사후 기록(`attendance`)이 한 테이블에 섞였습니다. 해제 시 앞의 4개는 비우고 `attendance`는 남기지 않는(경기 종료 후엔 해제하지 않으므로) 규칙이 §4.2.1에 있으나, 컬럼 성격이 갈리는 만큼 향후 분리 여지가 있습니다.
+
+### 0.1.1 v6 정정 (2026-09-10) — 알림 발송 위치
+
+| 구분 | 기존 서술 (v2, §2.9) | 정정 | 사유 |
+| --- | --- | --- | --- |
+| 알림톡 발송 시점 | `NotificationsService`가 알림 INSERT와 **동시에** 카카오 API를 호출하고 응답으로 `send_status` 갱신 | 도메인 트랜잭션은 `notifications` 행을 **`PENDING`으로 INSERT만** 한다. 실제 발송은 트랜잭션 밖 **디스패처**가 전담 (§5.4) | 발송 호출이 §4.1·§4.2 트랜잭션 안에 들어가면 **외부 API 응답 시간만큼 슬롯 행 락이 유지**된다. §4.1의 `FOR UPDATE SKIP LOCKED`는 잠긴 자리를 건너뛰므로, **빈 자리가 남았는데도 `POSITION_FULL`이 반환**된다 |
+| 최초 발송 ↔ 재시도 | §2.9(최초)와 §5.4(재시도)가 서로 다른 코드 | **한 디스패처로 통합** — `PENDING`·`FAILED`는 똑같이 "아직 안 보낸 것" | §5.1이 지적한 로직 이중화(해제 순서 규칙이 두 곳에 존재)를 알림 경로에서 반복하지 않기 위함 |
+
+> **v2 §2.9의 전제가 v4에서 무효가 됐습니다.** v2 시점에는 상태 전이 트랜잭션이 짧고 잠그는 행도 `reservations` 한 건뿐이어서, 그 안에서 외부 API를 부르는 비용이 눈에 띄지 않았습니다. **v4가 자리를 행으로 물질화하면서 트랜잭션이 `game_position_slot` 행 락을 쥐게 됐고**(§4.1), 같은 서술이 이제는 동시성 설계를 직접 무너뜨립니다. §0.2가 "v4 §2.6의 기각 근거 ①이 무효가 됐다"고 적은 것과 같은 성격의 정정입니다 — 서술이 틀렸다기보다 **근거가 된 전제가 사라졌습니다.**
+>
+> **스키마는 바뀌지 않습니다.** `notifications`는 `send_status`(`PENDING`/`SENT`/`FAILED`)와 `idx_notifications_send_status`를 이미 갖고 있어 **그 자체로 outbox 테이블**입니다. 바뀌는 것은 "누가 카카오 API를 부르는가" 한 가지뿐이고, 마이그레이션은 필요 없습니다.
+>
+> **알림 INSERT는 여전히 상태 전이와 같은 트랜잭션 안이어야 합니다.** 밖으로 빼면 "승인됐는데 알림 행이 없는" 상태가 생겨 outbox가 성립하지 않습니다. **INSERT는 안, 발송은 밖** — 이 두 문장이 함께 지켜져야 합니다.
 
 ### 0.2 v4 → v5 (홈/원정 팀 + 포지션별 참가비)
 
@@ -470,7 +484,19 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | `is_read` | bool | default false | 읽음 여부 |
 | `created_at` | timestamptz | default now() |  |
 
-> **(v2)** 알림 발송 채널이 카카오 알림톡으로 확정되면서 `send_status` 추가. `NotificationsService`가 알림 INSERT와 동시에 알림톡 API를 호출하고, 응답에 따라 `SENT`/`FAILED`로 갱신. 실패분은 Cron 재시도 대상.
+> **(v2)** 알림 발송 채널이 카카오 알림톡으로 확정되면서 `send_status` 추가.
+>
+> **(v6 정정 — 2026-09-10, §0.1.1)** ~~`NotificationsService`가 알림 INSERT와 동시에 알림톡 API를 호출하고, 응답에 따라 `SENT`/`FAILED`로 갱신.~~ → **도메인 트랜잭션은 이 행을 `PENDING`으로 INSERT만 합니다.** 카카오 API 호출은 트랜잭션 밖의 발송 디스패처(§5.4)가 전담하고, `SENT`/`FAILED` 갱신도 거기서 일어납니다.
+>
+> **이 테이블은 outbox입니다.** 발송에 필요한 것이 커밋된 행 하나에 전부 들어 있습니다 — 수신자(`user_id` → `users.phone`), 템플릿 키(`type`), 템플릿 변수 소스(`reservation_id` 조인), 미발송 스캔 인덱스(`idx_notifications_send_status`). 따라서 도메인 서비스는 **"발송"이 아니라 "기록"만** 하면 되고, 별도 아웃박스 테이블도 필요 없습니다.
+>
+> **트랜잭션 안에서 외부 API를 부르면 안 되는 이유 셋:**
+>
+> 1. **롤백이 안 됩니다.** §4.2 `approve()`는 4단계가 트랜잭션 안입니다. 여기서 발송한 뒤 트랜잭션이 실패하면 예약은 `PAYMENT_SUBMITTED`로 되돌아가는데 "승인되었습니다" 알림톡은 이미 도착해 있습니다.
+> 2. **슬롯 락이 외부 API 응답 시간만큼 유지됩니다.** §4.1은 `game_position_slot` 행 락을 쥔 채 진행되고, 동시 신청자는 `SKIP LOCKED`로 그 자리를 건너뜁니다 — **알림톡이 느려지면 빈 자리가 있는데도 `POSITION_FULL`이 납니다.** 외부 서비스 지연이 곧 예약 실패가 됩니다.
+> 3. **커넥션 풀이 고갈됩니다.** HTTP 응답을 기다리는 동안 pg 커넥션이 점유되어, 알림과 무관한 조회까지 함께 멈춥니다.
+>
+> **즉시성이 필요하면** 커밋 **후** 디스패처를 깨우면 됩니다. 그 호출은 실패해도 무방합니다 — 행이 이미 `PENDING`으로 커밋돼 있어 §5.4가 주워가므로, 즉시 발송은 최적화일 뿐 신뢰성의 일부가 아닙니다. 큐(BullMQ 등)를 도입할 때도 **바뀌는 것은 디스패처 내부뿐이고 도메인 서비스는 그대로**이며, outbox 행은 큐로 대체하지 않고 유지합니다(진실은 DB에 있어야 합니다).
 > 
 
 ### 2.10 `reservation_status_history` (예약 상태 이력) — **신규 (v6)**
@@ -713,7 +739,8 @@ dataSource.transaction(async (manager) => {
      → 아니면 NOT_PENDING_PAYMENT (409)
   2. manager.update(Reservation) status=APPROVED
   3. (v6) reservation_status_history INSERT (status=APPROVED, actor=HOST)
-  4. manager.save(Notification) (type=APPROVED, send_status=PENDING) → 알림톡 발송 트리거
+  4. manager.save(Notification) (type=APPROVED, send_status=PENDING)
+     ※ (v6 정정) 여기서 알림톡 API를 부르지 않는다 — 기록까지가 끝이고 발송은 §5.4 (§2.9)
 })
 ```
 
@@ -887,7 +914,8 @@ async expireReservations() {
 @Cron('0 * * * *')  // 매시
 // expires_at 기준 12h / 1h 전 구간 RESERVED 건을 찾아
 // notifications INSERT (EXPIRING_12H / EXPIRING_1H, send_status=PENDING), 중복 발송 방지 플래그 관리
-// → 카카오 알림톡 API 호출, 응답에 따라 send_status SENT/FAILED 갱신
+// (v6 정정) 여기서 카카오 API를 부르지 않는다 — PENDING INSERT까지가 끝이고,
+//           발송은 §5.4 디스패처가 전담한다 (§0.1.1)
 ```
 
 ### 5.3 노쇼 처리 (트리거 → 서비스 로직)
@@ -913,15 +941,26 @@ markNoShow(reservationId):   // (v6) 단건 정정 경로
 > **`no_show_count`는 예약당 1회입니다.** 자리 수와 무관하며, 정정으로 `NO_SHOW`를 되돌릴 때는 감산도 필요합니다 (§3.2).
 > 
 
-### 5.4 알림톡 발송 재시도 — 신규 (v2)
+### 5.4 알림톡 발송 디스패처 — 신규 (v2) · **(v6 정정) 재시도 전용 → 발송 전담**
+
+**(v6 정정 — §0.1.1)** 최초 발송이 도메인 트랜잭션에서 빠져나오면서, 이 Cron이 **모든 알림톡 발송의 유일한 출구**가 됩니다. `PENDING`(아직 안 보냄)과 `FAILED`(보냈다 실패)는 디스패처 입장에서 똑같이 "보내야 할 것"이므로 한 경로로 처리합니다.
 
 ```
-@Cron('*/5 * * * *')   // 5분마다
-async retryFailedNotifications() {
-  // send_status=FAILED 건을 찾아 카카오 알림톡 API 재호출
+@Cron('*/1 * * * *')   // (v6) 최초 발송을 겸하므로 주기를 5분 → 1분으로
+async dispatchNotifications() {
+  // send_status IN ('PENDING', 'FAILED') 건을 배치로 조회
+  //   → idx_notifications_send_status 사용, take 상한 필요
+  //   → user(수신 번호) · reservation(gameId·rejectReason) 조인해 템플릿 변수 구성
+  // 건별로 카카오 알림톡 API 호출 → SENT / FAILED 갱신
   // 재시도 횟수 상한(예: 3회) 초과 시 더 이상 재시도하지 않고 FAILED로 고정
 }
 ```
+
+> **도메인 서비스는 이 함수를 부르지 않습니다.** `approve()`·`reject()`·`markNoShow()`·§5.2는 `notifications`에 `PENDING` 행을 INSERT하는 데서 끝납니다 (§2.9).
+>
+> **즉시 발송이 필요하면 커밋 후 깨우기만 합니다.** 트랜잭션 **밖**에서 디스패처를 한 번 호출(또는 이벤트 발행)하는 형태이며, 그 호출이 실패해도 이 Cron이 주워가므로 유실되지 않습니다.
+>
+> **(v6 주의)** §5.2(만료 임박 알림)의 "카카오 알림톡 API 호출" 문구도 같은 정정을 받습니다 — §5.2는 `PENDING` 행을 INSERT하는 데까지만 하고, 발송은 이 디스패처가 합니다. 두 곳에서 보내면 §5.1이 지적한 로직 이중화가 알림 경로에서 재현됩니다.
 
 ### 5.5 만료 토큰 정리 — **신규 (v6)**
 

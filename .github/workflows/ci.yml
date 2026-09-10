@@ -37,6 +37,9 @@ jobs:
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
       DB_DATABASE: yaguhae_test
+      # AppModule 부트스트랩이 JWT 시크릿을 요구한다 (없으면 e2e가 기동 단계에서 실패).
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_REFRESH_SECRET: ci-refresh-secret
 
     steps:
       - name: 소스 체크아웃
