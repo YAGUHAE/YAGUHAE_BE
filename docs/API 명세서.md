@@ -62,6 +62,8 @@
 | 404 | `NOT_FOUND` | 리소스 없음 |
 | 409 | `CONFLICT` | 상태 전이 조건 위반 (아래 리소스별 표에 세분화) |
 | 422 | `VALIDATION_FAILED` | DTO 유효성 검증 실패 |
+| 422 | `SESSION_AMBIGUOUS` | **(v6.1)** 용병·어드민 세션이 둘 다 열려 있어 대상을 정할 수 없음 (§1) |
+| 401 | `INVALID_REFRESH_TOKEN` | **(v6.1)** refresh 토큰이 없거나 서명·만료·무효화 검증 실패 (§1) |
 | 500 | `INTERNAL_ERROR` | **(v6.1)** 처리되지 않은 서버 오류. 내부 메시지는 응답에 싣지 않습니다 |
 
 > **(v6.1)** `ValidationPipe`는 기본값 400 대신 **422**를 반환하도록 설정되어 있습니다(`errorHttpStatusCode`). 요청 본문 자체가 깨진 경우(JSON 파싱 실패 등)에만 400이 나가며 이때도 code는 `VALIDATION_FAILED`입니다.
@@ -90,6 +92,42 @@
 에러: `401 INVALID_CREDENTIALS`, `403 USER_SUSPENDED`
 
 > **(v6) `leagueId`를 응답에 싣습니다.** 어드민 콘솔은 로그인 직후부터 "내 리그"를 알아야 §4의 대시보드·경기 목록·예약 목록을 호출할 수 있습니다. 리그를 아직 만들지 않았으면 `null`(프론트가 리그 생성으로 유도), 여러 개면 가장 최근 리그를 담고 전체 목록은 `GET /leagues/mine`(§4)으로 받습니다.
+
+> **(v6.1) `UserSummaryDto`는 `{ id, role, nickname, profileCompleted }`입니다.** `profileCompleted`의 판정 기준은 §1.2와 같습니다(`nickname`·`region`·`selfLevel`이 모두 채워진 상태).
+
+> **(v6.1) 이메일이 없는 계정과 비밀번호가 틀린 경우를 구분하지 않습니다.** 둘 다 `401 INVALID_CREDENTIALS`입니다 — 구분하면 이메일 존재 여부를 확인하는 도구가 됩니다.
+
+**`POST /api/v1/auth/refresh`** — **(v6.1) 요청 계약 신설**
+
+```tsx
+// Request (둘 다 선택)
+{
+  refreshToken?: string;   // 쿠키를 쓰지 않는 클라이언트용. 있으면 쿠키보다 우선
+  session?: 'PLAYER' | 'HOST';  // 갱신할 세션
+}
+// Response: 로그인과 동일
+{ accessToken: string; refreshToken: string; user: UserSummaryDto; leagueId: string | null }
+```
+
+토큰을 고르는 순서는 `refreshToken` → `session`이 가리키는 쿠키 → **남은 refresh 쿠키가 하나뿐이면** 그것입니다.
+
+에러: `401 INVALID_REFRESH_TOKEN`, `403 USER_SUSPENDED`, `422 SESSION_AMBIGUOUS`
+
+> **(v6.1) 용병·어드민 refresh 쿠키가 둘 다 있는데 `session`이 없으면 `422 SESSION_AMBIGUOUS`로 거절합니다.** 두 세션이 같은 브라우저에 공존하는 이상(§1.1) 서버가 임의로 고르면 **엉뚱한 세션이 조용히 갱신됩니다.** 어느 콘솔에서 부르는지는 프론트가 알고 있으므로 되묻는 편이 낫습니다.
+
+> **(v6.1) 갱신은 회전(rotation)합니다.** 쓰인 refresh 토큰은 즉시 `revoked_at`이 찍히고 새 쌍이 발급됩니다. 그래서 **이미 무효화된 토큰이 다시 제시되면 탈취로 보고 그 유저의 모든 refresh 토큰을 무효화**합니다(ERD §2.12) — 클라이언트에는 `401 INVALID_REFRESH_TOKEN`만 나갑니다.
+
+**`POST /api/v1/auth/logout`**
+
+```tsx
+// Request (선택)
+{ refreshToken?: string }
+// Response: 204 No Content
+```
+
+생략하면 access 토큰이 말하는 역할의 refresh 쿠키를 무효화합니다 — 로그인한 세션이 곧 로그아웃할 세션이라 모호할 일이 없습니다. 해당 세션의 access·refresh 쿠키만 만료시키므로 **다른 세션의 로그인은 유지**됩니다.
+
+> **(v6.1) 로그아웃은 멱등합니다.** 이미 무효화됐거나 서버가 모르는 토큰이어도 204로 끝납니다 — "그런 토큰 없음"을 알려주면 토큰 유효성 확인 도구가 됩니다.
 
 ### 1.1 (v6) 토큰 전달 — httpOnly 쿠키
 
