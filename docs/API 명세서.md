@@ -13,27 +13,45 @@
 > - **v5 반영 (홈/원정 팀 + 포지션별 참가비):** ERD v5에서 **경기 내 홈/원정 팀 구분**과 **(팀×포지션)별 차등 참가비**가 도입되면서 이 문서의 경기·예약 계약이 변경됐습니다 — 경기 개설 요청의 `participationFee`가 경기 단위에서 포지션 단위로 이동, `GameDetailDto.positions[]`에 `team`·`participationFee` 추가, 신청 요청 필드(`positions: Position[]` → `slots: { team, position }[]`), `totalFee` 산식이 곱셈 → 합계로 변경, 에러 `detail.failedPositions` → `detail.failedSlots`(원소에 `team` 포함).
 > - **v4 반영 (예약 계약 변경):** ERD v4에서 예약 도메인이 **"희망 포지션 + 승인 시 확정"에서 "신청 시 실제 자리 점유"로** 바뀌면서 이 문서의 예약 계약도 실제로 변경됐습니다 — 신청 요청 필드(`preferredPositions` → `positions`), 승인 요청 바디 제거, 에러 코드 재배치(§6), 경기 상세의 잔여석 산출 기준(§5). **"포지션 무관" 신청은 금지**되며 이를 뜻하는 특수값을 정의하지 않습니다.
 > - **ORM 참고:** ORM이 Prisma → TypeORM으로 변경됐으나 이 문서는 엔드포인트·DTO·에러 계약 위주라 ORM 종속 표현은 없습니다 (구현 세부는 ERD 문서 §4~6 참고).
-> - **공통 규칙:** 모든 응답은 `{ data, error }` 형태. 인증 필요 엔드포인트는 `Authorization: Bearer <access_token>`.
+> - **공통 규칙:** 모든 응답은 `success` 플래그를 갖는 공통 봉투 형태(§0.1). 인증 필요 엔드포인트는 `Authorization: Bearer <access_token>`.
 - **전역 prefix:** 모든 엔드포인트는 `/api/v1`로 시작 (NestJS `app.setGlobalPrefix('api/v1')`).
 
 ---
 
 ## 0. 공통 사항
 
-### 0.1 에러 응답 포맷
+### 0.1 공통 응답 포맷 — **(v6.1 변경)**
+
+> **⚠️ 이전 판의 `{ data, error }` 봉투를 대체합니다.** 백엔드 코드 컨벤션(`.claude/skills/nestjs-backend/references/response-and-errors.md`)이 정의한 봉투로 통일했습니다. **`error` 객체가 사라지고 필드가 최상위로 평탄화**되며, 성공 여부는 `data`/`error`의 null 여부가 아니라 `success` 플래그로 판정합니다. 도메인 에러 코드(`code`)는 그대로 유지되므로 **에러 코드 표(§0.2 및 리소스별 표)는 전부 유효**합니다 — 읽는 경로만 `body.error.code` → `body.code`로 바뀝니다.
+
+성공:
 
 ```json
 {
-  "data": null,
-  "error": {
-    "code": "RESERVATION_ALREADY_APPROVED",
-    "message": "이미 승인된 예약입니다.",
-    "statusCode": 409
-  }
+  "success": true,
+  "data": { },
+  "timestamp": "2026-09-11T12:00:00.000Z"
 }
 ```
 
-> **(v4) `detail` 선택 필드.** 클라이언트가 실패를 **복구**하려면 무엇이 실패했는지 알아야 하는 경우, `error.detail`에 구조화된 정보를 추가로 담습니다. 현재 사용처는 §6 신청 실패(`POSITION_FULL`·`POSITION_NOT_OFFERED`)의 **(v5)** `detail.failedSlots`이며, 없을 수도 있는 필드이므로 클라이언트는 부재를 전제로 처리해야 합니다.
+실패:
+
+```json
+{
+  "success": false,
+  "code": "RESERVATION_ALREADY_APPROVED",
+  "message": "이미 승인된 예약입니다.",
+  "statusCode": 409,
+  "timestamp": "2026-09-11T12:00:00.000Z",
+  "path": "/api/v1/reservations/{id}/approve"
+}
+```
+
+- `data`는 **성공 응답에만** 있습니다. 이 문서에서 "Response: `XDto`"라고 쓰인 것은 전부 `data`에 담기는 값입니다.
+- `code`는 항상 문자열입니다. 구체적인 도메인 코드가 없는 예외는 §0.2의 HTTP 상태별 기본 코드로 채워집니다.
+- 봉투 자체는 전역 인터셉터(`ResponseInterceptor`)와 전역 예외 필터(`AllExceptionsFilter`)가 붙입니다. 컨트롤러·서비스는 봉투를 직접 만들지 않습니다.
+
+> **(v4) `detail` 선택 필드.** 클라이언트가 실패를 **복구**하려면 무엇이 실패했는지 알아야 하는 경우, `detail`에 구조화된 정보를 추가로 담습니다. 현재 사용처는 §6 신청 실패(`POSITION_FULL`·`POSITION_NOT_OFFERED`)의 **(v5)** `detail.failedSlots`이며, 없을 수도 있는 필드이므로 클라이언트는 부재를 전제로 처리해야 합니다. **(v6.1)** DTO 검증 실패(422)에서는 `detail.messages`에 필드별 메시지 배열이 들어가고, `message`에는 그중 대표 문구 하나만 담깁니다.
 
 ### 0.2 공통 에러 코드
 
@@ -44,6 +62,9 @@
 | 404 | `NOT_FOUND` | 리소스 없음 |
 | 409 | `CONFLICT` | 상태 전이 조건 위반 (아래 리소스별 표에 세분화) |
 | 422 | `VALIDATION_FAILED` | DTO 유효성 검증 실패 |
+| 500 | `INTERNAL_ERROR` | **(v6.1)** 처리되지 않은 서버 오류. 내부 메시지는 응답에 싣지 않습니다 |
+
+> **(v6.1)** `ValidationPipe`는 기본값 400 대신 **422**를 반환하도록 설정되어 있습니다(`errorHttpStatusCode`). 요청 본문 자체가 깨진 경우(JSON 파싱 실패 등)에만 400이 나가며 이때도 code는 `VALIDATION_FAILED`입니다.
 
 ---
 
