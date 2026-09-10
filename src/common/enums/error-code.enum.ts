@@ -15,4 +15,10 @@ export enum ErrorCode {
   CONFLICT = 'CONFLICT',
   VALIDATION_FAILED = 'VALIDATION_FAILED',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+
+  // --- auth ---
+  /** refresh 토큰이 없거나 서명·만료·무효화 검증에 실패 */
+  INVALID_REFRESH_TOKEN = 'INVALID_REFRESH_TOKEN',
+  /** PLAYER·HOST refresh 쿠키가 둘 다 있어 어느 세션을 갱신할지 정할 수 없음 */
+  SESSION_AMBIGUOUS = 'SESSION_AMBIGUOUS',
 }
