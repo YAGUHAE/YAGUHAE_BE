@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
 import { buildDataSourceOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
 
@@ -22,6 +23,7 @@ import { HealthModule } from './health/health.module';
           nodeEnv: configService.get<string>('NODE_ENV', 'development'),
         }),
     }),
+    AuthModule,
     HealthModule,
   ],
   controllers: [AppController],
