@@ -2,6 +2,12 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { League } from '../league/entities/league.entity';
+import { User } from '../user/entities/user.entity';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { RefreshToken } from './entities/refresh-token.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -15,6 +21,9 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 @Module({
   imports: [
     PassportModule,
+    // League는 로그인 응답의 leagueId(API 명세서 §1) 때문에 들어와 있다.
+    // LeagueModule이 생기면 LeagueService 주입으로 교체한다.
+    TypeOrmModule.forFeature([User, RefreshToken, League]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -30,7 +39,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
     }),
   ],
-  providers: [JwtStrategy, JwtAuthGuard, RolesGuard, RefreshTokenGuard],
+  controllers: [AuthController],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    RolesGuard,
+    RefreshTokenGuard,
+  ],
   exports: [JwtModule, JwtAuthGuard, RolesGuard, RefreshTokenGuard],
 })
 export class AuthModule {}
