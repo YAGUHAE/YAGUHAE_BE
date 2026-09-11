@@ -81,7 +81,8 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       # 443 server 블록이 담길 자리. 비어 있으면 include 가 무시된다.
-      - ./nginx/ssl:/etc/nginx/conf.d/ssl:ro
+      # conf.d 하위가 아니어야 한다 — 읽기 전용 마운트 안쪽에는 마운트할 수 없다.
+      - ./nginx/ssl:/etc/nginx/ssl-conf:ro
       - certbot_conf:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     healthcheck:
