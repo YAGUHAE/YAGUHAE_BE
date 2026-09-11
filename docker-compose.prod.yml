@@ -75,13 +75,39 @@ services:
         condition: service_healthy
     ports:
       - '${HTTP_PORT:-80}:80'
+      # 인증서가 없어도 포트는 미리 열어둔다. 443 을 듣는 server 블록이 아직
+      # 없으므로 연결은 거절되지만, HTTPS 전환 때 compose 를 고칠 필요가 없다.
+      - '${HTTPS_PORT:-443}:443'
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # 443 server 블록이 담길 자리. 비어 있으면 include 가 무시된다.
+      # conf.d 하위가 아니어야 한다 — 읽기 전용 마운트 안쪽에는 마운트할 수 없다.
+      - ./nginx/ssl:/etc/nginx/ssl-conf:ro
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1/api/v1/health']
       interval: 15s
       timeout: 5s
       retries: 5
 
+  # 인증서 발급·갱신 전용. 평소에는 뜨지 않고 profile 로 명시할 때만 실행된다.
+  #   발급: docker compose -f docker-compose.prod.yml --profile certbot run --rm certbot \
+  #           certonly --webroot -w /var/www/certbot -d "$DOMAIN" \
+  #           --email "$CERTBOT_EMAIL" --agree-tos --no-eff-email
+  #   갱신: docker compose -f docker-compose.prod.yml --profile certbot run --rm certbot renew
+  certbot:
+    image: certbot/certbot:latest
+    container_name: yaguhae-certbot
+    profiles: ['certbot']
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+
 volumes:
   yaguhae_pgdata:
+  # 발급받은 인증서. 이 볼륨을 지우면 재발급해야 하며 Let's Encrypt 의
+  # 발급 횟수 제한(도메인당 주 5회)에 걸릴 수 있다.
+  certbot_conf:
+  # HTTP-01 챌린지 토큰이 오가는 곳. nginx 가 읽고 certbot 이 쓴다.
+  certbot_www:

@@ -55,3 +55,7 @@ pids
 .omc/
 .claude/
 .vscode/
+
+# 443 설정은 서버에서 도메인을 치환해 만든다.
+# 인증서 경로가 환경마다 달라 커밋하면 다른 환경의 nginx가 기동에 실패한다.
+nginx/ssl/*.conf
