@@ -25,4 +25,8 @@ export enum ErrorCode {
   INVALID_REFRESH_TOKEN = 'INVALID_REFRESH_TOKEN',
   /** PLAYER·HOST refresh 쿠키가 둘 다 있어 어느 세션을 갱신할지 정할 수 없음 */
   SESSION_AMBIGUOUS = 'SESSION_AMBIGUOUS',
+
+  // --- bank ---
+  /** 하나 이상의 League가 이 계좌를 참조 중이라 삭제할 수 없음 */
+  BANK_IN_USE = 'BANK_IN_USE',
 }

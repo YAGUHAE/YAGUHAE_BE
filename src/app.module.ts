@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { BankModule } from './bank/bank.module';
 import { buildDataSourceOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
 import { UserModule } from './user/user.module';
@@ -25,6 +26,7 @@ import { UserModule } from './user/user.module';
         }),
     }),
     AuthModule,
+    BankModule,
     HealthModule,
     UserModule,
   ],
