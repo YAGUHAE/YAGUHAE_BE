@@ -1,8 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { LevelEnum, Position, UserRole } from '../common/enums';
 import { Evaluation } from '../evaluation/entities/evaluation.entity';
+import { UpdateMeDto } from './dto/update-me.dto';
 import { User } from './entities/user.entity';
 import { UserService } from './user.service';
 
@@ -96,15 +98,40 @@ describe('UserService', () => {
   });
 
   describe('updateMe', () => {
-    it('전달된 필드만 덮어쓴다', async () => {
-      const user = buildUser();
-      userRepository.findOne.mockResolvedValue(user);
+    beforeEach(() => {
+      userRepository.findOne.mockResolvedValue(buildUser());
       userRepository.save.mockImplementation((u: User) => Promise.resolve(u));
+    });
 
+    it('전달된 필드만 덮어쓴다', async () => {
       const result = await service.updateMe('u1', { nickname: '새이름' });
 
       expect(result.nickname).toBe('새이름');
       expect(result.region).toBe('서울');
+    });
+
+    /**
+     * 객체 리터럴이 아니라 **DTO 인스턴스**로 검증한다.
+     *
+     * ValidationPipe를 지난 실제 요청은 plainToInstance 결과이고, tsconfig의
+     * useDefineForClassFields 때문에 지정하지 않은 필드까지 `undefined` 값으로
+     * 존재한다. 리터럴로 테스트하면 그 키가 아예 없어서 이 버그가 재현되지 않는다.
+     */
+    it('DTO 인스턴스로 와도 미지정 필드가 응답에서 사라지지 않는다', async () => {
+      const dto = plainToInstance(UpdateMeDto, { nickname: '새이름' });
+
+      // 전제 확인 — 리터럴이었다면 키가 1개뿐이라 이 테스트가 의미 없다.
+      expect(Object.keys(dto).length).toBeGreaterThan(1);
+
+      const result = await service.updateMe('u1', dto);
+
+      expect(result.nickname).toBe('새이름');
+      expect(result.region).toBe('서울');
+      expect(result.selfLevel).toBe(LevelEnum.L2);
+      expect(JSON.parse(JSON.stringify(result))).toMatchObject({
+        region: '서울',
+        selfLevel: LevelEnum.L2,
+      });
     });
   });
 

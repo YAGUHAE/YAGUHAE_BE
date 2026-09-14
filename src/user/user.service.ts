@@ -38,7 +38,7 @@ export class UserService {
     const user = await this.findOneOrThrow(userId);
 
     // 빈 객체가 와도 save는 호출한다 — 응답이 항상 현재 프로필이어야 한다.
-    Object.assign(user, dto);
+    Object.assign(user, definedFieldsOf(dto));
 
     return UserDetailDto.from(await this.userRepository.save(user));
   }
@@ -93,6 +93,23 @@ export class UserService {
       bestPlayerCount: Number(row?.bestPlayerCount ?? 0),
     };
   }
+}
+
+/**
+ * DTO에서 **실제로 전달된** 필드만 남긴다.
+ *
+ * tsconfig의 target이 ES2023이라 useDefineForClassFields가 켜지고, DTO의 선언만
+ * 있는 필드가 런타임 클래스 필드로 만들어진다. 그래서 `{ nickname }` 하나만 보낸
+ * 요청도 ValidationPipe를 지나면 나머지 5개 키가 `undefined` 값으로 **존재한다.**
+ *
+ * 그대로 Object.assign 하면 DB는 무사하지만(TypeORM이 undefined를 "변경 없음"으로
+ * 본다) 메모리의 엔티티가 오염돼 응답 DTO가 그 필드를 잃는다 — JSON.stringify가
+ * undefined 키를 지우기 때문에 PATCH 응답이 UserDetailDto 계약을 어긴다.
+ */
+function definedFieldsOf(dto: UpdateMeDto): Partial<UpdateMeDto> {
+  return Object.fromEntries(
+    Object.entries(dto).filter(([, value]) => value !== undefined),
+  );
 }
 
 /** AVG는 numeric이라 드라이버가 문자열로 준다. 소수점 첫째 자리까지만 노출한다 */
