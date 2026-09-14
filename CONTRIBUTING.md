@@ -80,4 +80,5 @@ feat: 추가됨.
 
 - NestJS 백엔드 코드 컨벤션: [`.claude/skills/nestjs-backend/SKILL.md`](.claude/skills/nestjs-backend/SKILL.md)
 - API 명세: [`docs/API 명세서.md`](docs/API%20명세서.md)
+- 카카오 로그인 설정: [`docs/카카오 로그인 설정.md`](docs/카카오%20로그인%20설정.md)
 - ERD: [`docs/ERD.md`](docs/ERD.md)

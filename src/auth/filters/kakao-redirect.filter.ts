@@ -30,8 +30,12 @@ export class KakaoRedirectFilter implements ExceptionFilter {
       this.configService.get<string>('CORS_ORIGIN', 'http://localhost:3000'),
     );
 
+    // message 만 쓰면 'Failed to obtain access token' 이라는 상수 문자열뿐이다.
+    // 실제 원인(KOE006 등)은 passport-oauth2 의 InternalOAuthError 가
+    // oauthError 에 담아두고 toString() 에서만 꺼낸다. 이게 없으면 콘솔 설정
+    // 실수인지 서버 버그인지 구분할 방법이 없다.
     this.logger.warn(
-      `카카오 로그인 실패: ${exception instanceof Error ? exception.message : String(exception)}`,
+      `카카오 로그인 실패: ${exception instanceof Error ? exception.toString() : String(exception)}`,
     );
 
     response.redirect(
