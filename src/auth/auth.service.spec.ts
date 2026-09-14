@@ -6,7 +6,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { hashSync } from 'bcryptjs';
 import { createHash } from 'crypto';
 import { DataSource, EntityManager } from 'typeorm';
-import { UserRole } from '../common/enums';
+import { OAuthProvider, UserRole } from '../common/enums';
 import { League } from '../league/entities/league.entity';
 import { User } from '../user/entities/user.entity';
 import { AuthService } from './auth.service';
@@ -31,13 +31,23 @@ const buildHost = (overrides: Partial<User> = {}): User =>
 
 describe('AuthService', () => {
   let service: AuthService;
-  let userRepository: { findOne: jest.Mock };
+  let userRepository: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let refreshTokenRepository: { findOne: jest.Mock; update: jest.Mock };
   let leagueRepository: { findOne: jest.Mock };
   let manager: { update: jest.Mock; insert: jest.Mock };
 
   beforeEach(async () => {
-    userRepository = { findOne: jest.fn() };
+    userRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+    };
     refreshTokenRepository = { findOne: jest.fn(), update: jest.fn() };
     leagueRepository = { findOne: jest.fn().mockResolvedValue(null) };
     manager = { update: jest.fn(), insert: jest.fn() };
@@ -149,6 +159,86 @@ describe('AuthService', () => {
 
       expect(result.body.leagueId).toBeNull();
       expect(leagueRepository.findOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('kakaoLogin', () => {
+    const account = {
+      provider: OAuthProvider.KAKAO,
+      providerId: 'kakao-1',
+      nickname: '용병',
+      phone: '+821012345678',
+    };
+
+    it('기존 계정이 있으면 그대로 세션을 연다', async () => {
+      const user = buildHost({
+        role: UserRole.PLAYER,
+        provider: OAuthProvider.KAKAO,
+        providerId: 'kakao-1',
+        phone: '+821012345678',
+      });
+      userRepository.findOne.mockResolvedValue(user);
+
+      const result = await service.kakaoLogin(account);
+
+      expect(result.body.accessToken).toBe('access-token');
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('최초 로그인이면 PLAYER 계정을 만든다', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockImplementation((u: Partial<User>) => u as User);
+      userRepository.save.mockImplementation((u: User) =>
+        Promise.resolve({ ...u, id: 'new-1', isSuspended: false } as User),
+      );
+
+      await service.kakaoLogin(account);
+
+      expect(userRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: UserRole.PLAYER,
+          provider: OAuthProvider.KAKAO,
+          providerId: 'kakao-1',
+          nickname: '용병',
+        }),
+      );
+    });
+
+    it('동시 최초 로그인으로 유니크 위반이 나면 먼저 들어간 행을 쓴다', async () => {
+      const existing = buildHost({ role: UserRole.PLAYER, id: 'raced' });
+      userRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existing);
+      userRepository.create.mockImplementation((u: Partial<User>) => u as User);
+      userRepository.save.mockRejectedValue(
+        new Error('duplicate key value violates unique constraint'),
+      );
+
+      const result = await service.kakaoLogin(account);
+
+      expect(result.body.user.id).toBe('raced');
+    });
+
+    it('이미 저장된 번호는 덮지 않는다', async () => {
+      userRepository.findOne.mockResolvedValue(
+        buildHost({ role: UserRole.PLAYER, phone: '+821099998888' }),
+      );
+
+      await service.kakaoLogin(account);
+
+      expect(userRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('번호가 비어 있으면 카카오에서 받은 값으로 채운다', async () => {
+      userRepository.findOne.mockResolvedValue(
+        buildHost({ role: UserRole.PLAYER, phone: null }),
+      );
+
+      await service.kakaoLogin(account);
+
+      expect(userRepository.update).toHaveBeenCalledWith('host-1', {
+        phone: '+821012345678',
+      });
     });
   });
 
