@@ -12,7 +12,7 @@ import { EvaluationSummaryDto } from './evaluation-summary.dto';
  */
 export class UserProfileDto {
   @ApiProperty()
-  id: string;
+  id: number;
 
   @ApiProperty()
   nickname: string;

@@ -29,12 +29,12 @@ export class UserService {
   ) {}
 
   /** API 명세서 §2 — `GET /users/me` */
-  async findMe(userId: string): Promise<UserDetailDto> {
+  async findMe(userId: number): Promise<UserDetailDto> {
     return UserDetailDto.from(await this.findOneOrThrow(userId));
   }
 
   /** API 명세서 §2 — `PATCH /users/me` */
-  async updateMe(userId: string, dto: UpdateMeDto): Promise<UserDetailDto> {
+  async updateMe(userId: number, dto: UpdateMeDto): Promise<UserDetailDto> {
     const user = await this.findOneOrThrow(userId);
 
     // 빈 객체가 와도 save는 호출한다 — 응답이 항상 현재 프로필이어야 한다.
@@ -44,13 +44,13 @@ export class UserService {
   }
 
   /** API 명세서 §2 — `GET /users/:id` (선수 카드) */
-  async findProfile(userId: string): Promise<UserProfileDto> {
+  async findProfile(userId: number): Promise<UserProfileDto> {
     const user = await this.findOneOrThrow(userId);
 
     return UserProfileDto.from(user, await this.summarize(userId));
   }
 
-  private async findOneOrThrow(userId: string): Promise<User> {
+  private async findOneOrThrow(userId: number): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
 
     if (!user) {
@@ -73,7 +73,7 @@ export class UserService {
    * 평가가 없으면 AVG가 NULL이므로 0으로 떨어뜨린다 — 프론트가 null 분기를
    * 하지 않아도 되게 하고, "평가 없음"은 별점 0으로 표시된다.
    */
-  private async summarize(userId: string): Promise<EvaluationSummaryDto> {
+  private async summarize(userId: number): Promise<EvaluationSummaryDto> {
     const row = await this.evaluationRepository
       .createQueryBuilder('evaluation')
       .select('AVG(evaluation.mannerScore)', 'mannerAvg')

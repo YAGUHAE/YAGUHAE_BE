@@ -16,7 +16,7 @@ import { User } from '../entities/user.entity';
  */
 export class UserDetailDto {
   @ApiProperty()
-  id: string;
+  id: number;
 
   @ApiProperty({ enum: UserRole })
   role: UserRole;

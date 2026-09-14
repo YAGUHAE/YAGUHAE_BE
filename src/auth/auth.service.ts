@@ -264,7 +264,7 @@ export class AuthService {
     return league?.id ?? null;
   }
 
-  private async revokeAllForUser(userId: string): Promise<void> {
+  private async revokeAllForUser(userId: number): Promise<void> {
     await this.refreshTokenRepository.update(
       { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },

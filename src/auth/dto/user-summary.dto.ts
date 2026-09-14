@@ -6,7 +6,7 @@ import { isProfileCompleted } from '../../user/dto/user-detail.dto';
 /** API 명세서 §9 — 로그인 응답용 최소 필드 */
 export class UserSummaryDto {
   @ApiProperty()
-  id: string;
+  id: number;
 
   @ApiProperty({ enum: UserRole })
   role: UserRole;

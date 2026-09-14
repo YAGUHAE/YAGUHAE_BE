@@ -18,8 +18,8 @@ import { User } from '../../user/entities/user.entity';
 @Index('idx_notifications_send_status', ['sendStatus'])
 @Entity('notifications')
 export class Notification extends BaseEntity {
-  @Column({ type: 'uuid', name: 'user_id' })
-  userId: string;
+  @Column({ type: 'int', name: 'user_id' })
+  userId: number;
 
   @ManyToOne(() => User, (user) => user.notifications)
   @JoinColumn({ name: 'user_id' })

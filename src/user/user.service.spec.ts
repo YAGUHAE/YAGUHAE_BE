@@ -10,7 +10,7 @@ import { UserService } from './user.service';
 
 const buildUser = (overrides: Partial<User> = {}): User =>
   ({
-    id: 'u1',
+    id: 1,
     role: UserRole.PLAYER,
     email: null,
     passwordHash: null,
@@ -61,8 +61,8 @@ describe('UserService', () => {
     it('본인 조회에는 noShowCount가 실린다', async () => {
       userRepository.findOne.mockResolvedValue(buildUser());
 
-      await expect(service.findMe('u1')).resolves.toMatchObject({
-        id: 'u1',
+      await expect(service.findMe(1)).resolves.toMatchObject({
+        id: 1,
         noShowCount: 1,
         profileCompleted: true,
       });
@@ -73,7 +73,7 @@ describe('UserService', () => {
         buildUser({ passwordHash: 'hashed', providerId: 'kakao-1' }),
       );
 
-      const result = await service.findMe('u1');
+      const result = await service.findMe(1);
 
       expect(result).not.toHaveProperty('passwordHash');
       expect(result).not.toHaveProperty('providerId');
@@ -82,7 +82,7 @@ describe('UserService', () => {
     it('nickname·region·selfLevel 중 하나라도 비면 profileCompleted=false', async () => {
       userRepository.findOne.mockResolvedValue(buildUser({ selfLevel: null }));
 
-      await expect(service.findMe('u1')).resolves.toMatchObject({
+      await expect(service.findMe(1)).resolves.toMatchObject({
         profileCompleted: false,
       });
     });
@@ -90,7 +90,7 @@ describe('UserService', () => {
     it('없는 사용자는 404 NOT_FOUND', async () => {
       userRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findMe('nope')).rejects.toMatchObject({
+      await expect(service.findMe(999)).rejects.toMatchObject({
         code: 'NOT_FOUND',
         status: HttpStatus.NOT_FOUND,
       });
@@ -104,7 +104,7 @@ describe('UserService', () => {
     });
 
     it('전달된 필드만 덮어쓴다', async () => {
-      const result = await service.updateMe('u1', { nickname: '새이름' });
+      const result = await service.updateMe(1, { nickname: '새이름' });
 
       expect(result.nickname).toBe('새이름');
       expect(result.region).toBe('서울');
@@ -124,7 +124,7 @@ describe('UserService', () => {
         { enableImplicitConversion: false },
       );
 
-      const result = await service.updateMe('u1', dto);
+      const result = await service.updateMe(1, dto);
 
       expect(result.phone).toBe('+821098765432');
     });
@@ -135,7 +135,7 @@ describe('UserService', () => {
       // 전제 확인 — 리터럴이었다면 키가 1개뿐이라 이 테스트가 의미 없다.
       expect(Object.keys(dto).length).toBeGreaterThan(1);
 
-      const result = await service.updateMe('u1', dto);
+      const result = await service.updateMe(1, dto);
 
       expect(result.nickname).toBe('새이름');
       expect(result.region).toBe('서울');
@@ -158,7 +158,7 @@ describe('UserService', () => {
         bestPlayerCount: '3',
       });
 
-      const result = await service.findProfile('u1');
+      const result = await service.findProfile(1);
 
       for (const field of [
         'email',
@@ -180,7 +180,7 @@ describe('UserService', () => {
         bestPlayerCount: '3',
       });
 
-      await expect(service.findProfile('u1')).resolves.toMatchObject({
+      await expect(service.findProfile(1)).resolves.toMatchObject({
         evaluationSummary: {
           mannerAvg: 4.6,
           skillMatchAvg: 4.2,
@@ -198,7 +198,7 @@ describe('UserService', () => {
         bestPlayerCount: '0',
       });
 
-      await expect(service.findProfile('u1')).resolves.toMatchObject({
+      await expect(service.findProfile(1)).resolves.toMatchObject({
         evaluationSummary: {
           mannerAvg: 0,
           skillMatchAvg: 0,

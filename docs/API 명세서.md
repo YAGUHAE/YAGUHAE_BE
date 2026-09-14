@@ -4,9 +4,10 @@
 
 > **문서 정보**
 > 
-> - **최종 수정일:** 2026-09-08
+> - **최종 수정일:** 2026-09-14
 > - **기반 문서:** ERD + 상태머신 (NestJS + TypeORM 재정비판 **v4**) · 화면설계서(용병 v1 · 리그 어드민 v2.1) · 라우팅 설계 v1
 > - **범위:** REST 엔드포인트, 요청/응답 DTO, Guard 권한, 에러 케이스
+> - **v6.3 반영 (사용자 식별자 타입):** `users.id`가 uuid에서 자동 증가 정수로 바뀌었습니다. 응답·요청에서 **사용자 id 계열만 `number`**이고 나머지 리소스 id는 `string`(uuid) 그대로입니다 — §0.3 신설, §2·§4·§7 DTO 반영.
 > - **v6 반영 (화면설계서 동기화):** 화면설계서에서 확정된 사항 일부가 이 문서에 반영되지 않아, 이대로 구현하면 **P-4·P-5·P-8·A-5·A-7이 구현 불가능**한 상태였습니다(집계만으로는 포지션 보드를 그릴 수 없고, 자리마다 참가자 이름을 받을 곳이 없음). 이번 개정에서 맞춥니다 — ① 자리별 참가자 이름(`slots[].participantName`), ② `GameDetailDto.positions[].slots[]` **자리 단위 응답**, ③ **급수 제한 폐지**(`requiredLevel` → `recommendedLevel`, `LEVEL_NOT_ELIGIBLE` 삭제 — 화면설계서 §3.3), ④ 예약 상태 이력(`ReservationDto.history[]`), ⑤ 종료 예약의 **자리 스냅샷 보존**, ⑥ 어드민 전용 엔드포인트 4종(리그 대시보드 · 리그 경기 목록 · 리그 예약 목록 · 자리 단위 일괄 출석), ⑦ 평가 대상 참가자 목록, ⑧ 거절 사유, ⑨ 목록 응답 DTO 2종(`GameSummaryDto`·`ReservationSummaryDto`), ⑩ 인증 토큰 전달 방식(httpOnly 쿠키)과 신규 유저 분기, ⑪ `FeeTier` 신설과 리그 티어별 기본 참가비.
 > - **v6가 요구하는 ERD 변경:** `game_position_slot.participant_name`(신규) · `reservation_slot_snapshot`(신규, 또는 `reservations.slots_snapshot` JSONB) · `reservation_status_history`(신규 테이블) · `game_positions.fee_tier` · `leagues.intro` · `leagues.default_fees` · `games.notice` · `games.dugout_home`/`dugout_away` · `games.stadium_name`(nullable — 리그값 override) · `games.required_level` → `recommended_level`(검증 없음). **ERD 문서에 아직 반영되지 않았습니다.**
 > - **v6에서 바꾸지 않은 것 (프론트가 맞춥니다):** `Team` enum 값(`HOME`/`AWAY` — 화면 라벨은 프론트에서 `선공`/`후공`으로 표기) · `durationMin` · `gameDate`+`gameTime` 분리 · `LevelEnum`(`L1~L4`) · `gamewonUrl`/`uniqueplayUrl` 2개 분리 · HOST 로그인 식별자 `email` · `{ data, error }` 봉투 · `/api/v1` prefix · 알림 타입명(`EXPIRING_12H` 등). **표현이 다를 뿐 데이터가 부족하지 않으므로** 서버를 고치지 않고 프론트가 매핑합니다.
@@ -67,6 +68,21 @@
 | 500 | `INTERNAL_ERROR` | **(v6.1)** 처리되지 않은 서버 오류. 내부 메시지는 응답에 싣지 않습니다 |
 
 > **(v6.1)** `ValidationPipe`는 기본값 400 대신 **422**를 반환하도록 설정되어 있습니다(`errorHttpStatusCode`). 요청 본문 자체가 깨진 경우(JSON 파싱 실패 등)에만 400이 나가며 이때도 code는 `VALIDATION_FAILED`입니다.
+
+### 0.3 식별자 타입 — **(v6.3) 신설**
+
+**사용자 id만 `number`이고, 나머지 리소스 id는 전부 `string`(uuid)입니다.**
+
+| 대상 | 타입 | 해당 필드 |
+| --- | --- | --- |
+| 사용자 | `number` | `UserSummaryDto.id` · `UserDetailDto.id` · `UserProfileDto.id` · `LeagueDto.hostId` · `ParticipantDto.userId` · 평가 요청의 `evaluateeId` |
+| 그 외 전부 | `string` (uuid) | `leagueId` · `gameId` · `reservationId` · `bankId` · 알림 id 등 |
+
+> **(v6.3) `users.id`가 uuid에서 자동 증가 정수로 바뀌었습니다**(ERD §2.1). 사용자 식별자는 `/users/:id`처럼 사람이 직접 다루는 경로가 많아 짧은 정수가 낫다는 판단이며, **경기·예약 id는 추측 가능해지면 안 되므로 uuid를 유지합니다.**
+
+> **경로 파라미터도 같습니다.** `/users/:id`는 `ParseIntPipe`, 그 외 `/games/:id`·`/reservations/:id` 등은 `ParseUUIDPipe`로 받습니다. 두 파이프 모두 형식이 맞지 않으면 **400**입니다 — 전역 `ValidationPipe`의 422 설정은 body DTO 검증에만 적용되고 파라미터 파이프에는 미치지 않습니다.
+
+> **프론트는 사용자 id를 문자열로 비교하지 마세요.** `userId === '1'`은 항상 false입니다.
 
 ---
 
@@ -205,7 +221,7 @@
 
 ```tsx
 {
-  id: string;
+  id: number;                     // (v6.3) uuid → 정수 (§0.3)
   nickname: string;
   region: string;
   primaryPosition: Position;
@@ -325,7 +341,7 @@
 
 ```tsx
 {
-  id: string; hostId: string; name: string; region: string;
+  id: string; hostId: number; name: string; region: string;   // (v6.3) hostId는 정수 (§0.3)
   stadiumName: string;
   intro: string | null;                    // (v6)
   defaultFees: Record<FeeTier, number>;    // (v6)
@@ -853,7 +869,7 @@ export enum RejectReason {
 ```tsx
 {
   items: {
-    userId: string;
+    userId: number;                 // (v6.3) 정수 (§0.3)
     nickname: string;
     team: Team; position: Position;
     reviewedByMe: boolean;    // 요청자가 이미 평가한 대상
@@ -880,7 +896,7 @@ export enum RejectReason {
 // Request — 한 경기의 평가를 한 번에 제출합니다
 {
   items: {
-    evaluateeId: string;
+    evaluateeId: number;        // (v6.3) 정수 (§0.3)
     mannerScore: number;        // 1~5
     skillMatchScore: number;    // 1~5
     punctualityScore: number;   // 1~5

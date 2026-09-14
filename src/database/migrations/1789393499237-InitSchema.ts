@@ -1,14 +1,14 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class InitSchema1788842447852 implements MigrationInterface {
-  name = 'InitSchema1788842447852';
+export class InitSchema1789393499237 implements MigrationInterface {
+  name = 'InitSchema1789393499237';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `CREATE TABLE "banks" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "bank_name" text NOT NULL, "account" text NOT NULL, "holder" text NOT NULL, CONSTRAINT "PK_3975b5f684ec241e3901db62d77" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "leagues" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "host_id" uuid NOT NULL, "bank_id" uuid, "name" text NOT NULL, "region" text NOT NULL, "stadium_name" text NOT NULL, "intro" text, "default_fees" jsonb NOT NULL DEFAULT '{}', CONSTRAINT "PK_2275e1e3e32e9223298c3a0b514" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "leagues" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "host_id" integer NOT NULL, "bank_id" uuid, "name" text NOT NULL, "region" text NOT NULL, "stadium_name" text NOT NULL, "intro" text, "default_fees" jsonb NOT NULL DEFAULT '{}', CONSTRAINT "PK_2275e1e3e32e9223298c3a0b514" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE TYPE "public"."game_positions_team_enum" AS ENUM('HOME', 'AWAY')`,
@@ -74,7 +74,7 @@ export class InitSchema1788842447852 implements MigrationInterface {
       `CREATE TYPE "public"."reservations_reject_reason_enum" AS ENUM('NOT_DEPOSITED', 'AMOUNT_MISMATCH', 'DUPLICATE', 'OTHER')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "reservations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "game_id" uuid NOT NULL, "reserver_id" uuid NOT NULL, "slot_count" smallint NOT NULL, "total_fee" integer NOT NULL, "depositor_name" text NOT NULL, "status" "public"."reservations_status_enum" NOT NULL DEFAULT 'RESERVED', "reject_reason" "public"."reservations_reject_reason_enum", "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, CONSTRAINT "chk_reservations_reject_reason" CHECK ("status" <> 'REJECTED' OR "reject_reason" IS NOT NULL), CONSTRAINT "chk_reservations_total_fee" CHECK ("total_fee" >= 0), CONSTRAINT "chk_reservations_slot_count" CHECK ("slot_count" >= 1), CONSTRAINT "PK_da95cef71b617ac35dc5bcda243" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "reservations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "game_id" uuid NOT NULL, "reserver_id" integer NOT NULL, "slot_count" smallint NOT NULL, "total_fee" integer NOT NULL, "depositor_name" text NOT NULL, "status" "public"."reservations_status_enum" NOT NULL DEFAULT 'RESERVED', "reject_reason" "public"."reservations_reject_reason_enum", "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, CONSTRAINT "chk_reservations_reject_reason" CHECK ("status" <> 'REJECTED' OR "reject_reason" IS NOT NULL), CONSTRAINT "chk_reservations_total_fee" CHECK ("total_fee" >= 0), CONSTRAINT "chk_reservations_slot_count" CHECK ("slot_count" >= 1), CONSTRAINT "PK_da95cef71b617ac35dc5bcda243" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE UNIQUE INDEX "uq_reservations_active_per_game" ON "reservations" ("game_id", "reserver_id") WHERE status IN ('RESERVED', 'PAYMENT_SUBMITTED', 'APPROVED')`,
@@ -95,7 +95,7 @@ export class InitSchema1788842447852 implements MigrationInterface {
       `CREATE TYPE "public"."games_status_enum" AS ENUM('OPEN', 'CLOSED', 'CANCELLED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "games" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "league_id" uuid NOT NULL, "host_id" uuid NOT NULL, "game_date" date NOT NULL, "game_time" TIME NOT NULL, "duration_min" integer NOT NULL DEFAULT '120', "recommended_level" "public"."games_recommended_level_enum", "stadium_name" text, "notice" text, "dugout_home" text, "dugout_away" text, "status" "public"."games_status_enum" NOT NULL DEFAULT 'OPEN', CONSTRAINT "PK_c9b16b62917b5595af982d66337" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "games" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "league_id" uuid NOT NULL, "host_id" integer NOT NULL, "game_date" date NOT NULL, "game_time" TIME NOT NULL, "duration_min" integer NOT NULL DEFAULT '120', "recommended_level" "public"."games_recommended_level_enum", "stadium_name" text, "notice" text, "dugout_home" text, "dugout_away" text, "status" "public"."games_status_enum" NOT NULL DEFAULT 'OPEN', CONSTRAINT "PK_c9b16b62917b5595af982d66337" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE INDEX "idx_games_league" ON "games" ("league_id", "game_date", "game_time") `,
@@ -104,7 +104,7 @@ export class InitSchema1788842447852 implements MigrationInterface {
       `CREATE INDEX "idx_games_datetime" ON "games" ("game_date", "game_time") `,
     );
     await queryRunner.query(
-      `CREATE TABLE "evaluations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "game_id" uuid NOT NULL, "evaluator_id" uuid NOT NULL, "evaluatee_id" uuid NOT NULL, "manner_score" integer NOT NULL, "skill_match_score" integer NOT NULL, "punctuality_score" integer NOT NULL, "is_best_player" boolean NOT NULL DEFAULT false, CONSTRAINT "uq_evaluations_game_evaluator_evaluatee" UNIQUE ("game_id", "evaluator_id", "evaluatee_id"), CONSTRAINT "chk_evaluations_not_self" CHECK ("evaluator_id" <> "evaluatee_id"), CONSTRAINT "chk_evaluations_punctuality" CHECK ("punctuality_score" BETWEEN 1 AND 5), CONSTRAINT "chk_evaluations_skill_match" CHECK ("skill_match_score" BETWEEN 1 AND 5), CONSTRAINT "chk_evaluations_manner" CHECK ("manner_score" BETWEEN 1 AND 5), CONSTRAINT "PK_f683b433eba0e6dae7e19b29e29" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "evaluations" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "game_id" uuid NOT NULL, "evaluator_id" integer NOT NULL, "evaluatee_id" integer NOT NULL, "manner_score" integer NOT NULL, "skill_match_score" integer NOT NULL, "punctuality_score" integer NOT NULL, "is_best_player" boolean NOT NULL DEFAULT false, CONSTRAINT "uq_evaluations_game_evaluator_evaluatee" UNIQUE ("game_id", "evaluator_id", "evaluatee_id"), CONSTRAINT "chk_evaluations_not_self" CHECK ("evaluator_id" <> "evaluatee_id"), CONSTRAINT "chk_evaluations_punctuality" CHECK ("punctuality_score" BETWEEN 1 AND 5), CONSTRAINT "chk_evaluations_skill_match" CHECK ("skill_match_score" BETWEEN 1 AND 5), CONSTRAINT "chk_evaluations_manner" CHECK ("manner_score" BETWEEN 1 AND 5), CONSTRAINT "PK_f683b433eba0e6dae7e19b29e29" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE INDEX "idx_evaluations_best_player" ON "evaluations" ("game_id", "evaluator_id", "is_best_player") `,
@@ -119,7 +119,7 @@ export class InitSchema1788842447852 implements MigrationInterface {
       `CREATE TYPE "public"."notifications_send_status_enum" AS ENUM('PENDING', 'SENT', 'FAILED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "notifications" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "type" "public"."notifications_type_enum" NOT NULL, "reservation_id" uuid, "send_status" "public"."notifications_send_status_enum" NOT NULL DEFAULT 'PENDING', "is_read" boolean NOT NULL DEFAULT false, CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "notifications" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "user_id" integer NOT NULL, "type" "public"."notifications_type_enum" NOT NULL, "reservation_id" uuid, "send_status" "public"."notifications_send_status_enum" NOT NULL DEFAULT 'PENDING', "is_read" boolean NOT NULL DEFAULT false, CONSTRAINT "PK_6a72c3c0f683f6462415e653c3a" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE INDEX "idx_notifications_send_status" ON "notifications" ("send_status") `,
@@ -128,7 +128,7 @@ export class InitSchema1788842447852 implements MigrationInterface {
       `CREATE INDEX "idx_notifications_user" ON "notifications" ("user_id", "is_read") `,
     );
     await queryRunner.query(
-      `CREATE TABLE "refresh_tokens" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "user_id" uuid NOT NULL, "token_hash" text NOT NULL, "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, "revoked_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "UQ_a7838d2ba25be1342091b6695f1" UNIQUE ("token_hash"), CONSTRAINT "PK_7d8bee0204106019488c4c50ffa" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "refresh_tokens" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "user_id" integer NOT NULL, "token_hash" text NOT NULL, "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, "revoked_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "UQ_a7838d2ba25be1342091b6695f1" UNIQUE ("token_hash"), CONSTRAINT "PK_7d8bee0204106019488c4c50ffa" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE TYPE "public"."users_role_enum" AS ENUM('PLAYER', 'HOST')`,
@@ -143,7 +143,7 @@ export class InitSchema1788842447852 implements MigrationInterface {
       `CREATE TYPE "public"."users_self_level_enum" AS ENUM('L1', 'L2', 'L3', 'L4')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "role" "public"."users_role_enum" NOT NULL, "email" text, "password_hash" text, "provider" "public"."users_provider_enum", "provider_id" text, "nickname" text NOT NULL, "phone" text, "region" text, "primary_position" "public"."users_primary_position_enum", "self_level" "public"."users_self_level_enum", "gamewon_url" text, "uniqueplay_url" text, "no_show_count" integer NOT NULL DEFAULT '0', "is_suspended" boolean NOT NULL DEFAULT false, CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "users" ("id" SERIAL NOT NULL, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), "role" "public"."users_role_enum" NOT NULL, "email" text, "password_hash" text, "provider" "public"."users_provider_enum", "provider_id" text, "nickname" text NOT NULL, "phone" text, "region" text, "primary_position" "public"."users_primary_position_enum", "self_level" "public"."users_self_level_enum", "gamewon_url" text, "uniqueplay_url" text, "no_show_count" integer NOT NULL DEFAULT '0', "is_suspended" boolean NOT NULL DEFAULT false, CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE UNIQUE INDEX "uq_users_provider_id" ON "users" ("provider_id") WHERE provider_id IS NOT NULL`,

@@ -58,8 +58,8 @@ export class Reservation extends BaseEntity {
   game: Game;
 
   /** 신청자 (PLAYER) — 결제·연락 주체 */
-  @Column({ type: 'uuid', name: 'reserver_id' })
-  reserverId: string;
+  @Column({ type: 'int', name: 'reserver_id' })
+  reserverId: number;
 
   @ManyToOne(() => User, (user) => user.reservations)
   @JoinColumn({ name: 'reserver_id' })

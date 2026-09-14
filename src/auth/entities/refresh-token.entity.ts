@@ -17,8 +17,8 @@ import { User } from '../../user/entities/user.entity';
  */
 @Entity('refresh_tokens')
 export class RefreshToken extends BaseEntity {
-  @Column({ type: 'uuid', name: 'user_id' })
-  userId: string;
+  @Column({ type: 'int', name: 'user_id' })
+  userId: number;
 
   @ManyToOne(() => User, (user) => user.refreshTokens, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

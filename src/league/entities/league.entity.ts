@@ -8,8 +8,8 @@ import { User } from '../../user/entities/user.entity';
 /** ERD §2.2 */
 @Entity('leagues')
 export class League extends BaseEntity {
-  @Column({ type: 'uuid', name: 'host_id' })
-  hostId: string;
+  @Column({ type: 'int', name: 'host_id' })
+  hostId: number;
 
   @ManyToOne(() => User, (user) => user.leagues)
   @JoinColumn({ name: 'host_id' })
