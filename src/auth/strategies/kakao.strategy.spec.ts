@@ -1,6 +1,12 @@
 import { KakaoProfile } from 'passport-kakao';
 import { OAuthProvider } from '../../common/enums';
-import { normalizePhone, toKakaoAccount } from './kakao.strategy';
+import {
+  DEFAULT_KAKAO_SCOPE,
+  normalizePhone,
+  parseScope,
+  requireKakaoEnv,
+  toKakaoAccount,
+} from './kakao.strategy';
 
 describe('normalizePhone', () => {
   it('카카오가 주는 +82 10-1234-5678 을 E.164 로 정규화한다', () => {
@@ -49,5 +55,37 @@ describe('toKakaoAccount', () => {
 
   it('providerId 는 항상 문자열이다 (카카오는 숫자로 준다)', () => {
     expect(toKakaoAccount(profile({})).providerId).toBe('12345');
+  });
+});
+
+describe('parseScope', () => {
+  it('비어 있으면 기본 동의항목만 요청한다', () => {
+    expect(parseScope(undefined)).toEqual(DEFAULT_KAKAO_SCOPE);
+    expect(parseScope('')).toEqual(DEFAULT_KAKAO_SCOPE);
+    expect(parseScope('  ,  ')).toEqual(DEFAULT_KAKAO_SCOPE);
+  });
+
+  it('쉼표로 나누고 공백을 털어낸다', () => {
+    expect(parseScope('profile_nickname, phone_number')).toEqual([
+      'profile_nickname',
+      'phone_number',
+    ]);
+  });
+});
+
+describe('requireKakaoEnv', () => {
+  it('값이 있으면 그대로 돌려준다', () => {
+    expect(requireKakaoEnv('KAKAO_CLIENT_ID', 'abc')).toBe('abc');
+  });
+
+  /**
+   * ConfigService.getOrThrow 는 키가 없을 때만 던진다. .env.example 을 그대로
+   * 복사하면 빈 문자열이 통과해 passport 가 영어 TypeError 로 부팅을 깨뜨린다.
+   */
+  it('빈 문자열도 거부하고 무엇을 채워야 하는지 알려준다', () => {
+    expect(() => requireKakaoEnv('KAKAO_CLIENT_SECRET', '')).toThrow(
+      /KAKAO_CLIENT_SECRET/,
+    );
+    expect(() => requireKakaoEnv('KAKAO_CLIENT_ID', undefined)).toThrow(/채워/);
   });
 });

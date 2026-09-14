@@ -24,8 +24,13 @@ declare module 'passport-kakao' {
 
   export interface StrategyOptions {
     clientID: string;
+    /** 선택처럼 보이지만 비우면 passport-kakao가 'kakao' 더미로 채운다 */
     clientSecret?: string;
     callbackURL: string;
+    /** passport-oauth2가 scopeSeparator로 join해 인가 URL에 싣는다 */
+    scope?: string | string[];
+    /** 넘기지 않는다 — passport-kakao가 카카오 규격인 ','를 이미 채운다 */
+    scopeSeparator?: string;
   }
 
   export type VerifyCallback = (

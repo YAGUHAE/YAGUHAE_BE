@@ -42,6 +42,7 @@ jobs:
       JWT_REFRESH_SECRET: ci-refresh-secret
       # KakaoStrategy 가 getOrThrow 로 요구한다 (없으면 e2e 가 기동 단계에서 실패).
       KAKAO_CLIENT_ID: ci-kakao-client-id
+      KAKAO_CLIENT_SECRET: ci-kakao-client-secret
       KAKAO_CALLBACK_URL: http://localhost:4000/api/v1/auth/kakao/callback
 
     steps:
