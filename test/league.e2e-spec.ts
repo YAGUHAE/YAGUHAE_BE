@@ -9,7 +9,13 @@ import { createTestingApp } from './utils/create-testing-app';
 
 const UNKNOWN_LEAGUE_ID = '00000000-0000-4000-8000-0000000000ff';
 
-/** DB 행이 필요 없는 경로만 다룬다 — 가드·파이프가 계약대로 막는지가 목적이다. */
+/**
+ * 가드·파이프가 계약대로 막는지를 본다.
+ *
+ * 다른 e2e와 달리 **스키마가 필요하다** — 공개 목록과 소유권 가드가 실제로
+ * 테이블을 조회하기 때문이다. CI는 e2e 앞에 `pnpm migration:run`을 돌린다.
+ * 행을 만들지는 않으므로 실행 순서에 의존하지 않는다.
+ */
 describe('Leagues (e2e)', () => {
   let app: INestApplication<App>;
   let playerToken: string;
