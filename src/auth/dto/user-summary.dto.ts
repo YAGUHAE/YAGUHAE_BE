@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../../common/enums';
 import { User } from '../../user/entities/user.entity';
+import { isProfileCompleted } from '../../user/dto/user-detail.dto';
 
 /** API 명세서 §9 — 로그인 응답용 최소 필드 */
 export class UserSummaryDto {
@@ -24,7 +25,9 @@ export class UserSummaryDto {
       id: user.id,
       role: user.role,
       nickname: user.nickname,
-      profileCompleted: Boolean(user.nickname && user.region && user.selfLevel),
+      // 카카오 콜백의 온보딩 분기와 같은 함수를 쓴다 — 두 곳에 따로 적으면
+      // 한쪽만 고쳐져 "온보딩을 마쳤는데 또 온보딩으로 가는" 상태가 생긴다.
+      profileCompleted: isProfileCompleted(user),
     };
   }
 }

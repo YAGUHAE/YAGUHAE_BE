@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { buildDataSourceOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { HealthModule } from './health/health.module';
     }),
     AuthModule,
     HealthModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
