@@ -33,7 +33,7 @@ describe('AuthController', () => {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       user: {
-        id: 'u1',
+        id: 1,
         role,
         nickname: '유저',
         profileCompleted: true,
@@ -101,7 +101,7 @@ describe('AuthController', () => {
   it('갱신은 가드가 확정한 토큰을 그대로 서비스에 넘긴다', async () => {
     const refreshToken = {
       raw: 'raw',
-      payload: { sub: 'u1', role: UserRole.PLAYER },
+      payload: { sub: 1, role: UserRole.PLAYER },
     };
 
     await controller.refresh({}, { refreshToken } as Request, asResponse());
@@ -114,7 +114,7 @@ describe('AuthController', () => {
   });
 
   it('로그아웃은 역할에 맞는 refresh 쿠키를 무효화하고 그 세션 쿠키만 지운다', async () => {
-    const user = { id: 'u1', role: UserRole.PLAYER };
+    const user = { id: 1, role: UserRole.PLAYER };
     const request = {
       cookies: { player_refresh: 'p-refresh', admin_refresh: 'a-refresh' },
     } as unknown as Request;

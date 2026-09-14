@@ -242,7 +242,7 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 
 | 컬럼명 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
-| `id` | uuid | PK | 고유 식별자 |
+| `id` | int | PK, 자동 증가 (SERIAL) | 고유 식별자 — **(v6.3)** uuid에서 변경 |
 | `role` | UserRole | NOT NULL | HOST 또는 PLAYER |
 | `email` | text | UNIQUE (Partial) | HOST 전용 로그인 이메일 |
 | `password_hash` | text | nullable | **(v6 신규)** HOST 전용 로그인 비밀번호 해시 (bcrypt/argon2). PLAYER는 `NULL` |
@@ -259,11 +259,15 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | `is_suspended` | bool | default false | 정지 여부 (노쇼 2회 시) |
 | `created_at` | timestamptz | default now() |  |
 
+> **(v6.3) `users.id`만 자동 증가 정수입니다 — 나머지 테이블은 uuid 그대로입니다.** 사용자 식별자는 `/users/:id`·선수 카드처럼 사람이 직접 다루고 눈으로 확인하는 경로가 많아 짧은 정수가 낫습니다. 열거로 가입자 수가 드러나지만, 프로필 조회에는 인증이 필요하고 노출되는 값도 공개 프로필뿐이라 감수합니다. **반대로 경기·예약 id를 정수로 바꾸면 안 됩니다** — 예약 id는 추측되면 남의 예약 조회를 시도할 수 있는 값이라 uuid를 유지합니다.
+> 
+> **users.id를 참조하는 FK는 전부 `int`입니다** — `leagues.host_id`·`games.host_id`·`reservations.reserver_id`·`evaluations.evaluator_id`/`evaluatee_id`·`notifications.user_id`·`refresh_tokens.user_id`. API 응답에서도 사용자 id 계열만 `number`이고 나머지 id는 `string`입니다(API 명세서 §0.3).
+> 
 > **(v2)** `kakao_id text UNIQUE` → `provider OAuthProvider` + `provider_id text UNIQUE`로 분리. 카카오만 지원하는 현재는 `provider='KAKAO'` 고정이지만, 스키마 차원에서 다른 로그인 수단을 추가할 때 컬럼 구조를 바꾸지 않아도 됩니다.
 > 
 > **(v6) `password_hash` 신설 — 인증 경로가 두 갈래이기 때문입니다.** PLAYER는 카카오 OAuth(`provider`+`provider_id`), HOST는 이메일+비밀번호로 로그인합니다. v5까지는 HOST 로그인 계약이 API에만 있고 담을 컬럼이 없어 **스키마상 구현이 불가능**했습니다. 두 인증 수단은 배타적이므로 둘 다 nullable이며, "PLAYER는 `password_hash IS NULL`, HOST는 `provider_id IS NULL`"이 사실상의 불변식입니다 — `role`이 배타적인 한(§0.4 미해결 항목 1) CHECK로 강제할 수도 있으나, 후속 리팩터에서 역할 겸임이 생기면 제약이 걸림돌이 되므로 두지 않습니다.
 > 
-> **(v6) `phone` 신설 — 알림톡은 번호 없이 못 보냅니다.** 발송 채널이 카카오 알림톡으로 확정됐는데(§2.9) 수신처를 담을 곳이 없었습니다. 카카오 OAuth 동의항목으로 받거나 온보딩에서 입력받으며, **없으면 알림톡 발송을 건너뛰고 `send_status='FAILED'`로 남깁니다** — 알림 행 자체는 앱 내 알림함(P-11)을 위해 그대로 INSERT합니다. 두 경로가 갈리므로 발송 실패와 번호 부재를 구분하고 싶다면 `send_status`에 `SKIPPED`를 추가하는 확장 여지가 있습니다.
+> **(v6) `phone` 신설 — 알림톡은 번호 없이 못 보냅니다.** 발송 채널이 카카오 알림톡으로 확정됐는데(§2.9) 수신처를 담을 곳이 없었습니다. **카카오 `phone_number` 동의항목은 비즈 앱 전환 + 비즈니스 인증 + 개인정보 동의항목 심사를 통과해야 쓸 수 있어, 현 단계에서 OAuth 경로는 닫혀 있습니다** — 온보딩 입력(`PATCH /users/me`)이 유일한 수집 경로입니다. 심사 통과 후에는 두 경로가 공존하며(카카오 값은 비어 있을 때만 채움), **없으면 알림톡 발송을 건너뛰고 `send_status='FAILED'`로 남깁니다** — 알림 행 자체는 앱 내 알림함(P-11)을 위해 그대로 INSERT합니다. 두 경로가 갈리므로 발송 실패와 번호 부재를 구분하고 싶다면 `send_status`에 `SKIPPED`를 추가하는 확장 여지가 있습니다.
 > 
 > **(v6) `self_level`은 더 이상 신청을 막지 않습니다.** 급수 제한 폐지(§0.1)로 표시·필터 전용이 됐습니다. 컬럼은 그대로 유지합니다 — 선수 카드와 P-3 필터가 계속 사용합니다.
 > 
@@ -273,7 +277,7 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | 컬럼명 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | uuid | PK |  |
-| `host_id` | uuid | FK(users.id) | 리그 소유자 (HOST) |
+| `host_id` | int | FK(users.id) | 리그 소유자 (HOST) |
 | `bank_id` | uuid | FK(banks.id), **nullable (v6 변경)** | **(v2 신규)** 입금 계좌 참조 |
 | `name` | text | NOT NULL | 리그명 |
 | `region` | text | NOT NULL | 연고 지역 |
@@ -309,7 +313,7 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | --- | --- | --- | --- |
 | `id` | uuid | PK |  |
 | `league_id` | uuid | FK(leagues.id) | 소속 리그 |
-| `host_id` | uuid | FK(users.id) | 주최자 (리그 소유자와 일치) |
+| `host_id` | int | FK(users.id) | 주최자 (리그 소유자와 일치) |
 | `game_date` | date | NOT NULL | 경기 일자 |
 | `game_time` | time | NOT NULL | 경기 시작 시각 |
 | `duration_min` | int | default 120 | 경기 소요 분 (시간대 중복 판정용) |
@@ -421,7 +425,7 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | --- | --- | --- | --- |
 | `id` | uuid | PK |  |
 | `game_id` | uuid | FK(games.id) | 신청 경기 |
-| `reserver_id` | uuid | FK(users.id) | 신청자 (PLAYER) — 결제·연락 주체 |
+| `reserver_id` | int | FK(users.id) | 신청자 (PLAYER) — 결제·연락 주체 |
 | `slot_count` | smallint | NOT NULL, CHECK ≥ 1 | **(v4 신규)** 이 예약이 점유한 자리 수. **상한 없음** |
 | `total_fee` | int | NOT NULL, CHECK ≥ 0 | **(v5 신규)** 신청 시점 확정 참가비 총액 (점유 슬롯들의 포지션 단가 합계) |
 | `depositor_name` | text | NOT NULL | 입금자명 |
@@ -459,8 +463,8 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | --- | --- | --- | --- |
 | `id` | uuid | PK |  |
 | `game_id` | uuid | FK(games.id) | 대상 경기 |
-| `evaluator_id` | uuid | FK(users.id) | 평가한 사람 |
-| `evaluatee_id` | uuid | FK(users.id) | 평가받은 사람 |
+| `evaluator_id` | int | FK(users.id) | 평가한 사람 |
+| `evaluatee_id` | int | FK(users.id) | 평가받은 사람 |
 | `manner_score` | int | CHECK 1~5 | 매너 |
 | `skill_match_score` | int | CHECK 1~5 | 실력-프로필 일치도 |
 | `punctuality_score` | int | CHECK 1~5 | 시간 준수 |
@@ -477,7 +481,7 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | 컬럼명 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | uuid | PK |  |
-| `user_id` | uuid | FK(users.id) | 수신자 |
+| `user_id` | int | FK(users.id) | 수신자 |
 | `type` | NotificationType | NOT NULL | 알림 유형 |
 | `reservation_id` | uuid | FK(reservations.id), nullable | 관련 예약 |
 | `send_status` | NotificationSendStatus | default 'PENDING' | **(v2 신규)** 카카오 알림톡 발송 상태 |
@@ -550,7 +554,7 @@ export const POSITION_FEE_TIER: Record<Position, FeeTier> = {
 | 컬럼명 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | `id` | uuid | PK |  |
-| `user_id` | uuid | FK(users.id) ON DELETE CASCADE | 소유자 |
+| `user_id` | int | FK(users.id) ON DELETE CASCADE | 소유자 |
 | `token_hash` | text | NOT NULL, UNIQUE | 토큰 해시 (평문 저장 금지) |
 | `expires_at` | timestamptz | NOT NULL | 만료 시각 |
 | `revoked_at` | timestamptz | nullable | 무효화 시각. `NULL` = 유효 |

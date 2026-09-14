@@ -7,7 +7,7 @@ import { JwtPayload } from '../types/jwt-payload.type';
 import { RefreshTokenGuard } from './refresh-token.guard';
 
 describe('RefreshTokenGuard', () => {
-  const payload: JwtPayload = { sub: 'u1', role: UserRole.PLAYER };
+  const payload: JwtPayload = { sub: 1, role: UserRole.PLAYER };
   let jwtService: { verifyAsync: jest.Mock };
   let guard: RefreshTokenGuard;
 

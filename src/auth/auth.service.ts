@@ -12,6 +12,7 @@ import { League } from '../league/entities/league.entity';
 import { User } from '../user/entities/user.entity';
 import { AuthTokenResponseDto } from './dto/auth-token-response.dto';
 import { HostLoginDto } from './dto/host-login.dto';
+import { KakaoAccount } from './strategies/kakao.strategy';
 import { UserSummaryDto } from './dto/user-summary.dto';
 import { RefreshToken } from './entities/refresh-token.entity';
 import {
@@ -63,6 +64,55 @@ export class AuthService {
     }
 
     return this.startSession(user);
+  }
+
+  /**
+   * API 명세서 §1 — `GET /auth/kakao/callback`
+   *
+   * 최초 로그인이면 계정을 만든다. 별도의 회원가입 단계가 없고, 프로필은
+   * 온보딩에서 채운다 — 그래서 여기서 만드는 행은 nickname 말고는 비어 있다.
+   */
+  async kakaoLogin(account: KakaoAccount): Promise<AuthResult> {
+    const user =
+      (await this.findByProvider(account)) ??
+      (await this.createPlayer(account));
+
+    // 카카오에서 번호를 새로 받았고 아직 비어 있으면 채운다.
+    // 이미 값이 있으면 덮지 않는다 — 사용자가 온보딩에서 고쳤을 수 있다.
+    if (!user.phone && account.phone) {
+      user.phone = account.phone;
+      await this.userRepository.update(user.id, { phone: account.phone });
+    }
+
+    return this.startSession(user);
+  }
+
+  private findByProvider(account: KakaoAccount): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { provider: account.provider, providerId: account.providerId },
+    });
+  }
+
+  private async createPlayer(account: KakaoAccount): Promise<User> {
+    try {
+      return await this.userRepository.save(
+        this.userRepository.create({
+          role: UserRole.PLAYER,
+          provider: account.provider,
+          providerId: account.providerId,
+          nickname: account.nickname,
+          phone: account.phone,
+        }),
+      );
+    } catch (error) {
+      // 같은 계정으로 동시에 두 번 들어오면 provider_id 부분 유니크에 걸린다.
+      // 먼저 들어간 쪽이 만든 행을 쓰면 되므로 실패로 취급하지 않는다.
+      const existing = await this.findByProvider(account);
+      if (!existing) {
+        throw error;
+      }
+      return existing;
+    }
   }
 
   /**
@@ -214,7 +264,7 @@ export class AuthService {
     return league?.id ?? null;
   }
 
-  private async revokeAllForUser(userId: string): Promise<void> {
+  private async revokeAllForUser(userId: number): Promise<void> {
     await this.refreshTokenRepository.update(
       { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },

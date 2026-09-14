@@ -1,5 +1,12 @@
-import { Column, Entity, Index, OneToMany } from 'typeorm';
-import { BaseEntity } from '../../common/entities/base.entity';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import {
   LevelEnum,
   OAuthProvider,
@@ -29,7 +36,22 @@ import { Reservation } from '../../reservation/entities/reservation.entity';
   where: 'provider_id IS NOT NULL',
 })
 @Entity('users')
-export class User extends BaseEntity {
+export class User {
+  /**
+   * 다른 엔티티는 전부 BaseEntity의 uuid PK를 쓰지만, User만 1부터 증가하는
+   * 정수를 쓴다 — TS 상속 규칙상 서브클래스에서 부모 프로퍼티 타입을
+   * string에서 number로 좁힐 수 없어(BaseEntity.id: string) 상속 대신
+   * id/createdAt/updatedAt을 직접 선언한다.
+   */
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
   @Column({ type: 'enum', enum: UserRole })
   role: UserRole;
 

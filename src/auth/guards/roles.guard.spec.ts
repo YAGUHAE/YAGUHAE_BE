@@ -43,16 +43,16 @@ describe('RolesGuard', () => {
   it('역할이 맞으면 통과', () => {
     requireRoles([UserRole.HOST]);
 
-    expect(
-      guard.canActivate(contextWith({ id: 'u1', role: UserRole.HOST })),
-    ).toBe(true);
+    expect(guard.canActivate(contextWith({ id: 1, role: UserRole.HOST }))).toBe(
+      true,
+    );
   });
 
   it('역할이 다르면 403 FORBIDDEN', () => {
     requireRoles([UserRole.HOST]);
 
     const error = captureError(() =>
-      guard.canActivate(contextWith({ id: 'u1', role: UserRole.PLAYER })),
+      guard.canActivate(contextWith({ id: 1, role: UserRole.PLAYER })),
     );
 
     expect(error).toMatchObject({

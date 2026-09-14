@@ -11,7 +11,10 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { KakaoRedirectFilter } from './filters/kakao-redirect.filter';
+import { KakaoAuthGuard } from './guards/kakao-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { KakaoStrategy } from './strategies/kakao.strategy';
 
 /**
  * access 토큰 서명·검증만 JwtModule 기본 설정으로 둔다.
@@ -43,9 +46,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   providers: [
     AuthService,
     JwtStrategy,
+    KakaoStrategy,
     JwtAuthGuard,
+    KakaoAuthGuard,
     RolesGuard,
     RefreshTokenGuard,
+    KakaoRedirectFilter,
   ],
   exports: [JwtModule, JwtAuthGuard, RolesGuard, RefreshTokenGuard],
 })

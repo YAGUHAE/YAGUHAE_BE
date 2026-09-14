@@ -6,7 +6,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { hashSync } from 'bcryptjs';
 import { createHash } from 'crypto';
 import { DataSource, EntityManager } from 'typeorm';
-import { UserRole } from '../common/enums';
+import { OAuthProvider, UserRole } from '../common/enums';
 import { League } from '../league/entities/league.entity';
 import { User } from '../user/entities/user.entity';
 import { AuthService } from './auth.service';
@@ -18,7 +18,7 @@ const sha256 = (value: string) =>
 
 const buildHost = (overrides: Partial<User> = {}): User =>
   ({
-    id: 'host-1',
+    id: 1,
     role: UserRole.HOST,
     email: 'host@yaguhae.kr',
     passwordHash: hashSync(PASSWORD, 4),
@@ -31,13 +31,23 @@ const buildHost = (overrides: Partial<User> = {}): User =>
 
 describe('AuthService', () => {
   let service: AuthService;
-  let userRepository: { findOne: jest.Mock };
+  let userRepository: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let refreshTokenRepository: { findOne: jest.Mock; update: jest.Mock };
   let leagueRepository: { findOne: jest.Mock };
   let manager: { update: jest.Mock; insert: jest.Mock };
 
   beforeEach(async () => {
-    userRepository = { findOne: jest.fn() };
+    userRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+    };
     refreshTokenRepository = { findOne: jest.fn(), update: jest.fn() };
     leagueRepository = { findOne: jest.fn().mockResolvedValue(null) };
     manager = { update: jest.fn(), insert: jest.fn() };
@@ -125,12 +135,12 @@ describe('AuthService', () => {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
         leagueId: 'league-1',
-        user: { id: 'host-1', role: UserRole.HOST, profileCompleted: true },
+        user: { id: 1, role: UserRole.HOST, profileCompleted: true },
       });
       expect(manager.insert).toHaveBeenCalledWith(
         RefreshToken,
         expect.objectContaining({
-          userId: 'host-1',
+          userId: 1,
           // 평문이 아니라 해시가 저장돼야 한다 (ERD §2.12)
           tokenHash: sha256('refresh-token'),
         }),
@@ -152,10 +162,90 @@ describe('AuthService', () => {
     });
   });
 
+  describe('kakaoLogin', () => {
+    const account = {
+      provider: OAuthProvider.KAKAO,
+      providerId: 'kakao-1',
+      nickname: '용병',
+      phone: '+821012345678',
+    };
+
+    it('기존 계정이 있으면 그대로 세션을 연다', async () => {
+      const user = buildHost({
+        role: UserRole.PLAYER,
+        provider: OAuthProvider.KAKAO,
+        providerId: 'kakao-1',
+        phone: '+821012345678',
+      });
+      userRepository.findOne.mockResolvedValue(user);
+
+      const result = await service.kakaoLogin(account);
+
+      expect(result.body.accessToken).toBe('access-token');
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('최초 로그인이면 PLAYER 계정을 만든다', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+      userRepository.create.mockImplementation((u: Partial<User>) => u as User);
+      userRepository.save.mockImplementation((u: User) =>
+        Promise.resolve({ ...u, id: 3, isSuspended: false } as User),
+      );
+
+      await service.kakaoLogin(account);
+
+      expect(userRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: UserRole.PLAYER,
+          provider: OAuthProvider.KAKAO,
+          providerId: 'kakao-1',
+          nickname: '용병',
+        }),
+      );
+    });
+
+    it('동시 최초 로그인으로 유니크 위반이 나면 먼저 들어간 행을 쓴다', async () => {
+      const existing = buildHost({ role: UserRole.PLAYER, id: 2 });
+      userRepository.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existing);
+      userRepository.create.mockImplementation((u: Partial<User>) => u as User);
+      userRepository.save.mockRejectedValue(
+        new Error('duplicate key value violates unique constraint'),
+      );
+
+      const result = await service.kakaoLogin(account);
+
+      expect(result.body.user.id).toBe(2);
+    });
+
+    it('이미 저장된 번호는 덮지 않는다', async () => {
+      userRepository.findOne.mockResolvedValue(
+        buildHost({ role: UserRole.PLAYER, phone: '+821099998888' }),
+      );
+
+      await service.kakaoLogin(account);
+
+      expect(userRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('번호가 비어 있으면 카카오에서 받은 값으로 채운다', async () => {
+      userRepository.findOne.mockResolvedValue(
+        buildHost({ role: UserRole.PLAYER, phone: null }),
+      );
+
+      await service.kakaoLogin(account);
+
+      expect(userRepository.update).toHaveBeenCalledWith(1, {
+        phone: '+821012345678',
+      });
+    });
+  });
+
   describe('refresh', () => {
     const context = {
       raw: 'presented',
-      payload: { sub: 'host-1', role: UserRole.HOST },
+      payload: { sub: 1, role: UserRole.HOST },
     };
 
     it('저장되지 않은 토큰은 401', async () => {
@@ -169,7 +259,7 @@ describe('AuthService', () => {
     it('이미 무효화된 토큰의 재제시는 유저의 전 세션을 끊는다', async () => {
       refreshTokenRepository.findOne.mockResolvedValue({
         id: 'rt-1',
-        userId: 'host-1',
+        userId: 1,
         revokedAt: new Date(),
         expiresAt: new Date(Date.now() + 1000),
       });
@@ -178,7 +268,7 @@ describe('AuthService', () => {
         code: 'INVALID_REFRESH_TOKEN',
       });
       expect(refreshTokenRepository.update).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'host-1' }),
+        expect.objectContaining({ userId: 1 }),
         expect.objectContaining({ revokedAt: expect.any(Date) as Date }),
       );
     });
@@ -186,7 +276,7 @@ describe('AuthService', () => {
     it('만료된 행은 401', async () => {
       refreshTokenRepository.findOne.mockResolvedValue({
         id: 'rt-1',
-        userId: 'host-1',
+        userId: 1,
         revokedAt: null,
         expiresAt: new Date(Date.now() - 1000),
       });
@@ -199,7 +289,7 @@ describe('AuthService', () => {
     it('성공하면 옛 행을 무효화하고 새 행을 같은 트랜잭션에서 저장한다', async () => {
       refreshTokenRepository.findOne.mockResolvedValue({
         id: 'rt-1',
-        userId: 'host-1',
+        userId: 1,
         revokedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
       });
@@ -218,7 +308,7 @@ describe('AuthService', () => {
   });
 
   describe('logout', () => {
-    const user = { id: 'host-1', role: UserRole.HOST };
+    const user = { id: 1, role: UserRole.HOST };
 
     it('토큰이 없으면 아무것도 하지 않는다 (멱등)', async () => {
       await service.logout(user);
@@ -232,7 +322,7 @@ describe('AuthService', () => {
       expect(refreshTokenRepository.update).toHaveBeenCalledWith(
         expect.objectContaining({
           tokenHash: sha256('presented'),
-          userId: 'host-1',
+          userId: 1,
         }),
         expect.objectContaining({ revokedAt: expect.any(Date) as Date }),
       );

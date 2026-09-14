@@ -40,15 +40,15 @@ export class Evaluation extends BaseEntity {
   @JoinColumn({ name: 'game_id' })
   game: Game;
 
-  @Column({ type: 'uuid', name: 'evaluator_id' })
-  evaluatorId: string;
+  @Column({ type: 'int', name: 'evaluator_id' })
+  evaluatorId: number;
 
   @ManyToOne(() => User, (user) => user.evaluationsGiven)
   @JoinColumn({ name: 'evaluator_id' })
   evaluator: User;
 
-  @Column({ type: 'uuid', name: 'evaluatee_id' })
-  evaluateeId: string;
+  @Column({ type: 'int', name: 'evaluatee_id' })
+  evaluateeId: number;
 
   @ManyToOne(() => User, (user) => user.evaluationsReceived)
   @JoinColumn({ name: 'evaluatee_id' })

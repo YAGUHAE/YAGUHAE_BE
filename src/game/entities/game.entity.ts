@@ -31,8 +31,8 @@ export class Game extends BaseEntity {
   league: League;
 
   /** 리그 소유자와 일치 */
-  @Column({ type: 'uuid', name: 'host_id' })
-  hostId: string;
+  @Column({ type: 'int', name: 'host_id' })
+  hostId: number;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'host_id' })

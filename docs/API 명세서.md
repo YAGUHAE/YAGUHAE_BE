@@ -4,9 +4,10 @@
 
 > **문서 정보**
 > 
-> - **최종 수정일:** 2026-09-08
+> - **최종 수정일:** 2026-09-14
 > - **기반 문서:** ERD + 상태머신 (NestJS + TypeORM 재정비판 **v4**) · 화면설계서(용병 v1 · 리그 어드민 v2.1) · 라우팅 설계 v1
 > - **범위:** REST 엔드포인트, 요청/응답 DTO, Guard 권한, 에러 케이스
+> - **v6.3 반영 (사용자 식별자 타입):** `users.id`가 uuid에서 자동 증가 정수로 바뀌었습니다. 응답·요청에서 **사용자 id 계열만 `number`**이고 나머지 리소스 id는 `string`(uuid) 그대로입니다 — §0.3 신설, §2·§4·§7 DTO 반영.
 > - **v6 반영 (화면설계서 동기화):** 화면설계서에서 확정된 사항 일부가 이 문서에 반영되지 않아, 이대로 구현하면 **P-4·P-5·P-8·A-5·A-7이 구현 불가능**한 상태였습니다(집계만으로는 포지션 보드를 그릴 수 없고, 자리마다 참가자 이름을 받을 곳이 없음). 이번 개정에서 맞춥니다 — ① 자리별 참가자 이름(`slots[].participantName`), ② `GameDetailDto.positions[].slots[]` **자리 단위 응답**, ③ **급수 제한 폐지**(`requiredLevel` → `recommendedLevel`, `LEVEL_NOT_ELIGIBLE` 삭제 — 화면설계서 §3.3), ④ 예약 상태 이력(`ReservationDto.history[]`), ⑤ 종료 예약의 **자리 스냅샷 보존**, ⑥ 어드민 전용 엔드포인트 4종(리그 대시보드 · 리그 경기 목록 · 리그 예약 목록 · 자리 단위 일괄 출석), ⑦ 평가 대상 참가자 목록, ⑧ 거절 사유, ⑨ 목록 응답 DTO 2종(`GameSummaryDto`·`ReservationSummaryDto`), ⑩ 인증 토큰 전달 방식(httpOnly 쿠키)과 신규 유저 분기, ⑪ `FeeTier` 신설과 리그 티어별 기본 참가비.
 > - **v6가 요구하는 ERD 변경:** `game_position_slot.participant_name`(신규) · `reservation_slot_snapshot`(신규, 또는 `reservations.slots_snapshot` JSONB) · `reservation_status_history`(신규 테이블) · `game_positions.fee_tier` · `leagues.intro` · `leagues.default_fees` · `games.notice` · `games.dugout_home`/`dugout_away` · `games.stadium_name`(nullable — 리그값 override) · `games.required_level` → `recommended_level`(검증 없음). **ERD 문서에 아직 반영되지 않았습니다.**
 > - **v6에서 바꾸지 않은 것 (프론트가 맞춥니다):** `Team` enum 값(`HOME`/`AWAY` — 화면 라벨은 프론트에서 `선공`/`후공`으로 표기) · `durationMin` · `gameDate`+`gameTime` 분리 · `LevelEnum`(`L1~L4`) · `gamewonUrl`/`uniqueplayUrl` 2개 분리 · HOST 로그인 식별자 `email` · `{ data, error }` 봉투 · `/api/v1` prefix · 알림 타입명(`EXPIRING_12H` 등). **표현이 다를 뿐 데이터가 부족하지 않으므로** 서버를 고치지 않고 프론트가 매핑합니다.
@@ -67,6 +68,21 @@
 | 500 | `INTERNAL_ERROR` | **(v6.1)** 처리되지 않은 서버 오류. 내부 메시지는 응답에 싣지 않습니다 |
 
 > **(v6.1)** `ValidationPipe`는 기본값 400 대신 **422**를 반환하도록 설정되어 있습니다(`errorHttpStatusCode`). 요청 본문 자체가 깨진 경우(JSON 파싱 실패 등)에만 400이 나가며 이때도 code는 `VALIDATION_FAILED`입니다.
+
+### 0.3 식별자 타입 — **(v6.3) 신설**
+
+**사용자 id만 `number`이고, 나머지 리소스 id는 전부 `string`(uuid)입니다.**
+
+| 대상 | 타입 | 해당 필드 |
+| --- | --- | --- |
+| 사용자 | `number` | `UserSummaryDto.id` · `UserDetailDto.id` · `UserProfileDto.id` · `LeagueDto.hostId` · `ParticipantDto.userId` · 평가 요청의 `evaluateeId` |
+| 그 외 전부 | `string` (uuid) | `leagueId` · `gameId` · `reservationId` · `bankId` · 알림 id 등 |
+
+> **(v6.3) `users.id`가 uuid에서 자동 증가 정수로 바뀌었습니다**(ERD §2.1). 사용자 식별자는 `/users/:id`처럼 사람이 직접 다루는 경로가 많아 짧은 정수가 낫다는 판단이며, **경기·예약 id는 추측 가능해지면 안 되므로 uuid를 유지합니다.**
+
+> **경로 파라미터도 같습니다.** `/users/:id`는 `ParseIntPipe`, 그 외 `/games/:id`·`/reservations/:id` 등은 `ParseUUIDPipe`로 받습니다. 두 파이프 모두 형식이 맞지 않으면 **400**입니다 — 전역 `ValidationPipe`의 422 설정은 body DTO 검증에만 적용되고 파라미터 파이프에는 미치지 않습니다.
+
+> **프론트는 사용자 id를 문자열로 비교하지 마세요.** `userId === '1'`은 항상 false입니다.
 
 ---
 
@@ -159,6 +175,14 @@
 >
 > **토큰을 쿼리스트링에 싣지 않습니다.** 리퍼러·브라우저 히스토리·서버 액세스 로그에 그대로 남습니다.
 >
+> **(v6.2) 구현 노트.** 판정은 `isProfileCompleted()`(`src/user/dto/user-detail.dto.ts`) 하나로 모아 콜백 분기와 `UserSummaryDto`·`UserDetailDto`가 공유합니다. 두 곳에 따로 두면 한쪽만 고쳐져 "온보딩을 마쳤는데 또 온보딩으로 가는" 상태가 생깁니다.
+
+> **(v6.2) 실패 리다이렉트의 `error`는 §0.2의 `code` 값입니다.** 사용자가 동의를 거부하면 `UNAUTHORIZED`, 정지 계정이면 `USER_SUSPENDED`, 그 외 서버 오류는 `INTERNAL_ERROR`입니다. **원인 문구는 싣지 않습니다** — 쿼리스트링은 브라우저 히스토리에 남습니다.
+
+> **(v6.2) 최초 로그인 시 `phone`은 항상 `null`입니다.** 카카오 `phone_number` 동의항목은 비즈 앱 전환·비즈니스 인증·심사를 통과해야 쓸 수 있어, 현재는 **온보딩 입력(`PATCH /users/me`)이 유일한 수집 경로**입니다. 설정 절차는 [카카오 로그인 설정](카카오%20로그인%20설정.md) 참고.
+
+> **(v6.2) 최초 로그인 시 계정이 자동 생성됩니다.** 별도 회원가입 단계가 없어 `nickname`(카카오 동의 시) 외에는 비어 있는 행이 만들어지고, 나머지는 온보딩에서 채웁니다.
+
 > **프로필 완성 기준은 `nickname`·`region`·`self_level`이 모두 채워진 상태**입니다. 같은 판정을 `GET /users/me` 응답에 `profileCompleted: boolean`으로 실어, 온보딩을 건너뛰고 URL로 직접 들어온 경우를 프론트가 막을 수 있게 합니다.
 
 ---
@@ -188,6 +212,7 @@
   selfLevel?: LevelEnum;
   gamewonUrl?: string;
   uniqueplayUrl?: string;   // 신규
+  phone?: string;           // (v6.2) 신규 — 알림톡 수신 번호
 }
 // Response: UserDetailDto
 ```
@@ -196,7 +221,7 @@
 
 ```tsx
 {
-  id: string;
+  id: number;                     // (v6.3) uuid → 정수 (§0.3)
   nickname: string;
   region: string;
   primaryPosition: Position;
@@ -214,6 +239,19 @@
 
 > ✅ **확정:** `no_show_count`는 타인에게 노출하지 않음 — 공개 프로필 DTO에서 제외. `UserDetailDto`(본인 전용 `/users/me`)에는 계속 포함.
 > 
+
+> **(v6.2) 공개 프로필에서 빠지는 필드 전체:** `email` · `provider` · `providerId` · `phone` · `noShowCount` · `isSuspended`. 앞 넷은 신원 정보, 뒤 둘은 노쇼 이력이라 주최자만 봅니다(ERD §7).
+
+> **(v6.2) `UserDetailDto`에 `profileCompleted`·`isSuspended`·`createdAt`이 포함됩니다.** `passwordHash`·`providerId`는 본인 조회에서도 내려가지 않습니다.
+
+> **(v6.2) `evaluationSummary`의 평균은 소수점 첫째 자리 반올림**이며, **평가가 없으면 `0`**입니다(`null`이 아님). 프론트가 null 분기를 하지 않아도 되게 한 것이며, "평가 없음"은 별점 0으로 표시됩니다.
+
+> **(v6.2) `phone`은 어떤 표기로 넣어도 E.164로 저장됩니다.** `010-1234-5678` · `+82 10-1234-5678` 모두 받아 `+821012345678`로 정규화합니다(ERD §2.1). 형식을 판별할 수 없으면 422 `VALIDATION_FAILED`이며, **명시적 `null`도 422**입니다 — 한 번의 실수로 알림 채널이 조용히 사라지지 않게 생략만 허용합니다.
+
+> **(v6.2) `phone`은 `profileCompleted` 판정에 들어가지 않습니다.** 포함하면 이미 온보딩을 마친 사용자가 전부 다시 온보딩으로 튕깁니다(§1.2).
+
+> **(v6.2) `PATCH /users/me`는 DTO에 없는 필드를 422로 거절합니다.** 전역 `ValidationPipe`가 `forbidNonWhitelisted`라 `role`·`isSuspended`·`noShowCount` 등을 실으면 요청 자체가 거부됩니다.
+
 
 ---
 
@@ -303,7 +341,7 @@
 
 ```tsx
 {
-  id: string; hostId: string; name: string; region: string;
+  id: string; hostId: number; name: string; region: string;   // (v6.3) hostId는 정수 (§0.3)
   stadiumName: string;
   intro: string | null;                    // (v6)
   defaultFees: Record<FeeTier, number>;    // (v6)
@@ -831,7 +869,7 @@ export enum RejectReason {
 ```tsx
 {
   items: {
-    userId: string;
+    userId: number;                 // (v6.3) 정수 (§0.3)
     nickname: string;
     team: Team; position: Position;
     reviewedByMe: boolean;    // 요청자가 이미 평가한 대상
@@ -858,7 +896,7 @@ export enum RejectReason {
 // Request — 한 경기의 평가를 한 번에 제출합니다
 {
   items: {
-    evaluateeId: string;
+    evaluateeId: number;        // (v6.3) 정수 (§0.3)
     mannerScore: number;        // 1~5
     skillMatchScore: number;    // 1~5
     punctualityScore: number;   // 1~5
