@@ -20,3 +20,36 @@ updates:
         patterns:
           - '*'
     open-pull-requests-limit: 5
+
+  # npm(pnpm) 의존성 보안·버전 업데이트
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Seoul
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+    # 프로덕션과 개발 의존성을 나눠 묶는다. 런타임에 실제로 실리는 쪽이
+    # 어느 것인지 PR 제목에서 바로 구분돼야 우선순위를 정할 수 있다.
+    groups:
+      prod-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    # 메이저 업데이트는 그룹에 묶지 않고 개별 PR로 받는다 —
+    # 호환성 확인이 필요해 한꺼번에 머지할 수 없다.
+    open-pull-requests-limit: 5
+    ignore:
+      # NestJS 메이저는 생태계 패키지가 함께 올라가야 해서 개별 대응한다.
+      - dependency-name: '@nestjs/*'
+        update-types: ['version-update:semver-major']
