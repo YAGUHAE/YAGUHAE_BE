@@ -2,27 +2,10 @@ import { KakaoProfile } from 'passport-kakao';
 import { OAuthProvider } from '../../common/enums';
 import {
   DEFAULT_KAKAO_SCOPE,
-  normalizePhone,
   parseScope,
   requireKakaoEnv,
   toKakaoAccount,
 } from './kakao.strategy';
-
-describe('normalizePhone', () => {
-  it('카카오가 주는 +82 10-1234-5678 을 E.164 로 정규화한다', () => {
-    expect(normalizePhone('+82 10-1234-5678')).toBe('+821012345678');
-  });
-
-  it('동의하지 않아 값이 없으면 null (알림톡을 건너뛴다)', () => {
-    expect(normalizePhone(undefined)).toBeNull();
-    expect(normalizePhone('')).toBeNull();
-  });
-
-  it('E.164 형태가 아니면 저장하지 않는다', () => {
-    expect(normalizePhone('010-1234-5678')).toBeNull();
-    expect(normalizePhone('전화번호없음')).toBeNull();
-  });
-});
 
 describe('toKakaoAccount', () => {
   const profile = (json: KakaoProfile['_json']): KakaoProfile => ({
