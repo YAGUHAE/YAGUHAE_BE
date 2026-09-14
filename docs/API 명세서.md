@@ -159,6 +159,12 @@
 >
 > **토큰을 쿼리스트링에 싣지 않습니다.** 리퍼러·브라우저 히스토리·서버 액세스 로그에 그대로 남습니다.
 >
+> **(v6.2) 구현 노트.** 판정은 `isProfileCompleted()`(`src/user/dto/user-detail.dto.ts`) 하나로 모아 콜백 분기와 `UserSummaryDto`·`UserDetailDto`가 공유합니다. 두 곳에 따로 두면 한쪽만 고쳐져 "온보딩을 마쳤는데 또 온보딩으로 가는" 상태가 생깁니다.
+
+> **(v6.2) 실패 리다이렉트의 `error`는 §0.2의 `code` 값입니다.** 사용자가 동의를 거부하면 `UNAUTHORIZED`, 정지 계정이면 `USER_SUSPENDED`, 그 외 서버 오류는 `INTERNAL_ERROR`입니다. **원인 문구는 싣지 않습니다** — 쿼리스트링은 브라우저 히스토리에 남습니다.
+
+> **(v6.2) 최초 로그인 시 계정이 자동 생성됩니다.** 별도 회원가입 단계가 없어 `nickname`(카카오 동의 시) 외에는 비어 있는 행이 만들어지고, 나머지는 온보딩에서 채웁니다.
+
 > **프로필 완성 기준은 `nickname`·`region`·`self_level`이 모두 채워진 상태**입니다. 같은 판정을 `GET /users/me` 응답에 `profileCompleted: boolean`으로 실어, 온보딩을 건너뛰고 URL로 직접 들어온 경우를 프론트가 막을 수 있게 합니다.
 
 ---
@@ -214,6 +220,15 @@
 
 > ✅ **확정:** `no_show_count`는 타인에게 노출하지 않음 — 공개 프로필 DTO에서 제외. `UserDetailDto`(본인 전용 `/users/me`)에는 계속 포함.
 > 
+
+> **(v6.2) 공개 프로필에서 빠지는 필드 전체:** `email` · `provider` · `providerId` · `phone` · `noShowCount` · `isSuspended`. 앞 넷은 신원 정보, 뒤 둘은 노쇼 이력이라 주최자만 봅니다(ERD §7).
+
+> **(v6.2) `UserDetailDto`에 `profileCompleted`·`isSuspended`·`createdAt`이 포함됩니다.** `passwordHash`·`providerId`는 본인 조회에서도 내려가지 않습니다.
+
+> **(v6.2) `evaluationSummary`의 평균은 소수점 첫째 자리 반올림**이며, **평가가 없으면 `0`**입니다(`null`이 아님). 프론트가 null 분기를 하지 않아도 되게 한 것이며, "평가 없음"은 별점 0으로 표시됩니다.
+
+> **(v6.2) `PATCH /users/me`는 DTO에 없는 필드를 422로 거절합니다.** 전역 `ValidationPipe`가 `forbidNonWhitelisted`라 `role`·`isSuspended`·`noShowCount` 등을 실으면 요청 자체가 거부됩니다.
+
 
 ---
 
