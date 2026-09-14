@@ -117,6 +117,18 @@ describe('UserService', () => {
      * useDefineForClassFields 때문에 지정하지 않은 필드까지 `undefined` 값으로
      * 존재한다. 리터럴로 테스트하면 그 키가 아예 없어서 이 버그가 재현되지 않는다.
      */
+    it('전화번호는 어떤 표기로 넣어도 E.164로 저장된다', async () => {
+      const dto = plainToInstance(
+        UpdateMeDto,
+        { phone: '010-9876-5432' },
+        { enableImplicitConversion: false },
+      );
+
+      const result = await service.updateMe('u1', dto);
+
+      expect(result.phone).toBe('+821098765432');
+    });
+
     it('DTO 인스턴스로 와도 미지정 필드가 응답에서 사라지지 않는다', async () => {
       const dto = plainToInstance(UpdateMeDto, { nickname: '새이름' });
 
