@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ErrorCode } from '../common/enums/error-code.enum';
 import { BusinessException } from '../common/exceptions/business.exception';
+import { definedFieldsOf } from '../common/utils/defined-fields.util';
 import { Evaluation } from '../evaluation/entities/evaluation.entity';
 import { EvaluationSummaryDto } from './dto/evaluation-summary.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
@@ -93,23 +94,6 @@ export class UserService {
       bestPlayerCount: Number(row?.bestPlayerCount ?? 0),
     };
   }
-}
-
-/**
- * DTO에서 **실제로 전달된** 필드만 남긴다.
- *
- * tsconfig의 target이 ES2023이라 useDefineForClassFields가 켜지고, DTO의 선언만
- * 있는 필드가 런타임 클래스 필드로 만들어진다. 그래서 `{ nickname }` 하나만 보낸
- * 요청도 ValidationPipe를 지나면 나머지 5개 키가 `undefined` 값으로 **존재한다.**
- *
- * 그대로 Object.assign 하면 DB는 무사하지만(TypeORM이 undefined를 "변경 없음"으로
- * 본다) 메모리의 엔티티가 오염돼 응답 DTO가 그 필드를 잃는다 — JSON.stringify가
- * undefined 키를 지우기 때문에 PATCH 응답이 UserDetailDto 계약을 어긴다.
- */
-function definedFieldsOf(dto: UpdateMeDto): Partial<UpdateMeDto> {
-  return Object.fromEntries(
-    Object.entries(dto).filter(([, value]) => value !== undefined),
-  );
 }
 
 /** AVG는 numeric이라 드라이버가 문자열로 준다. 소수점 첫째 자리까지만 노출한다 */
