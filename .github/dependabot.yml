@@ -53,3 +53,9 @@ updates:
       # NestJS 메이저는 생태계 패키지가 함께 올라가야 해서 개별 대응한다.
       - dependency-name: '@nestjs/*'
         update-types: ['version-update:semver-major']
+      # @types/node 메이저는 런타임 Node 메이저와 함께 올린다. 타입만 앞서면
+      # 그 버전에만 있는 API를 컴파일러가 통과시켜, 빌드는 되는데 운영에서 터진다.
+      # 런타임은 Dockerfile 전 스테이지와 CI 모두 Node 24다.
+      # Node를 올릴 때 이 규칙을 지운다.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
