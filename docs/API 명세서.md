@@ -7,7 +7,8 @@
 > - **최종 수정일:** 2026-09-14
 > - **기반 문서:** ERD + 상태머신 (NestJS + TypeORM 재정비판 **v4**) · 화면설계서(용병 v1 · 리그 어드민 v2.1) · 라우팅 설계 v1
 > - **범위:** REST 엔드포인트, 요청/응답 DTO, Guard 권한, 에러 케이스
-> - **v6.3 반영 (Banks 구현):** §3의 요청·응답 계약을 구현에 맞춰 확정했습니다 — `BankDto` 필드, `GET /banks`의 `{ items }` 형태, `PATCH` 요청 계약, `409 BANK_IN_USE`의 `detail.leagueCount`.
+> - **v6.3 반영 (Leagues 구현):** §4의 `bankId`를 **생성 시 선택**으로 정정하고(ERD §2.2의 nullable과 어긋나 있었습니다), `LeagueDto.bank`를 nullable로 명시했습니다. 소유권 라우트에 `@Roles`가 함께 필요한 이유도 §4에 적었습니다. `GET /leagues/:id/dashboard`는 §5·§6 DTO에 의존해 **아직 구현되지 않았습니다.**
+ §3의 요청·응답 계약을 구현에 맞춰 확정했습니다 — `BankDto` 필드, `GET /banks`의 `{ items }` 형태, `PATCH` 요청 계약, `409 BANK_IN_USE`의 `detail.leagueCount`.
 > - **v6.3 반영 (사용자 식별자 타입):** `users.id`가 uuid에서 자동 증가 정수로 바뀌었습니다. 응답·요청에서 **사용자 id 계열만 `number`**이고 나머지 리소스 id는 `string`(uuid) 그대로입니다 — §0.3 신설, §2·§4·§7 DTO 반영.
 > - **v6 반영 (화면설계서 동기화):** 화면설계서에서 확정된 사항 일부가 이 문서에 반영되지 않아, 이대로 구현하면 **P-4·P-5·P-8·A-5·A-7이 구현 불가능**한 상태였습니다(집계만으로는 포지션 보드를 그릴 수 없고, 자리마다 참가자 이름을 받을 곳이 없음). 이번 개정에서 맞춥니다 — ① 자리별 참가자 이름(`slots[].participantName`), ② `GameDetailDto.positions[].slots[]` **자리 단위 응답**, ③ **급수 제한 폐지**(`requiredLevel` → `recommendedLevel`, `LEVEL_NOT_ELIGIBLE` 삭제 — 화면설계서 §3.3), ④ 예약 상태 이력(`ReservationDto.history[]`), ⑤ 종료 예약의 **자리 스냅샷 보존**, ⑥ 어드민 전용 엔드포인트 4종(리그 대시보드 · 리그 경기 목록 · 리그 예약 목록 · 자리 단위 일괄 출석), ⑦ 평가 대상 참가자 목록, ⑧ 거절 사유, ⑨ 목록 응답 DTO 2종(`GameSummaryDto`·`ReservationSummaryDto`), ⑩ 인증 토큰 전달 방식(httpOnly 쿠키)과 신규 유저 분기, ⑪ `FeeTier` 신설과 리그 티어별 기본 참가비.
 > - **v6가 요구하는 ERD 변경:** `game_position_slot.participant_name`(신규) · `reservation_slot_snapshot`(신규, 또는 `reservations.slots_snapshot` JSONB) · `reservation_status_history`(신규 테이블) · `game_positions.fee_tier` · `leagues.intro` · `leagues.default_fees` · `games.notice` · `games.dugout_home`/`dugout_away` · `games.stadium_name`(nullable — 리그값 override) · `games.required_level` → `recommended_level`(검증 없음). **ERD 문서에 아직 반영되지 않았습니다.**
@@ -355,12 +356,16 @@
   name: string;
   region: string;
   stadiumName: string;   // ERD 변경: games → leagues로 이동
-  bankId: string;        // ERD 변경: 신규 Bank 엔티티 참조 (games의 deposit* 필드 대체)
+  bankId?: string;       // (v6.3) 선택으로 정정 — 아래 참고
   intro?: string;        // (v6) 리그 소개 — A-8 리그 설정
-  defaultFees: Record<FeeTier, number>;   // (v6) 티어별 참가비 기본값 — A-8에서 정하고 A-4에 프리필
+  defaultFees?: Record<FeeTier, number>;  // (v6) 티어별 참가비 기본값 — A-8에서 정하고 A-4에 프리필
 }
 // Response: LeagueDto
 ```
+
+> **(v6.3) `bankId`·`defaultFees`는 선택입니다 — 문서 간 불일치를 정정했습니다.** 이 블록은 둘을 필수로 적고 있었지만 ERD §2.2는 `leagues.bank_id`를 **nullable로 바꿨고**(v6), 그 이유가 "A-8은 계좌를 리그 생성 이후에 등록한다"입니다. 필수로 받으면 **계좌를 먼저 만들지 않고는 리그를 만들 수 없어** A-8 흐름이 성립하지 않습니다. `defaultFees`도 마찬가지로 생성 시점에 미정일 수 있어 생략하면 `{}`로 저장됩니다. 대신 **경기 개설 시점에는 서버가 계좌를 요구합니다**(`LEAGUE_BANK_REQUIRED` — §5).
+
+> **(v6.3) `defaultFees`는 티어 4종만 받습니다.** 전역 `ValidationPipe`가 `forbidNonWhitelisted`라 오타난 키(`PITCHERS` 등)는 422로 거절되고, 각 값은 0 이상의 정수여야 합니다. 오타가 조용히 저장되면 A-4 프리필이 빈 값으로 뜨는데 원인이 리그 설정에 있다는 걸 알기 어렵습니다.
 
 > **(v6) `FeeTier` enum 신설.** 참가비를 포지션 11종마다 따로 정하지 않고 **티어 4종**으로 묶어 정합니다 — 화면설계서 §3.1이 확정한 모델이며, A-8 리그 설정과 A-4 경기 등록이 둘 다 티어 단위 입력입니다. 포지션 11개에 금액을 따로 받는 UI는 어디에도 없습니다.
 >
@@ -394,11 +399,15 @@
   id: string; hostId: number; name: string; region: string;   // (v6.3) hostId는 정수 (§0.3)
   stadiumName: string;
   intro: string | null;                    // (v6)
-  defaultFees: Record<FeeTier, number>;    // (v6)
-  bank: BankDto;   // bankId를 조인해서 내려줌 (참가비 안내 화면에 그대로 필요)
+  defaultFees: Record<FeeTier, number>;    // (v6) 정하지 않은 티어는 키가 없다
+  bank: BankDto | null;   // (v6.3) 계좌 미등록이면 null. bankId를 조인해서 내려줌
   createdAt: string;
 }
 ```
+
+> **(v6.3) `bank`는 null일 수 있습니다.** 계좌를 아직 등록하지 않은 리그가 존재할 수 있기 때문입니다(위 참고). `bankId`가 아니라 객체로 내려주는 것은 참가비 안내 화면이 은행명·계좌번호·예금주를 그대로 필요로 해서이며, id만 주면 화면마다 한 번씩 더 조회하게 됩니다.
+
+> **(v6.3) `GET /leagues`·`GET /leagues/mine`의 응답은 `{ items: LeagueDto[] }`입니다** (최신 생성 순). `GET /leagues`는 인증이 필요 없습니다 — 용병이 로그인 전에 리그를 둘러봅니다.
 
 **`PATCH /api/v1/leagues/:id`** — **(v6)**
 
@@ -412,6 +421,8 @@
 // Response: LeagueDto
 ```
 
+> **(v6.3) 소유권 라우트에도 `@Roles`를 함께 붙입니다.** 가드 표의 `OwnershipGuard`만 붙이면 역할 검사가 빠지는데, **`JwtAuthGuard`가 `@Roles` 메타데이터를 보고 어느 세션 쿠키를 읽을지 정합니다**(§1.1). 표시가 없으면 용병 쿠키를 먼저 집기 때문에, 두 세션이 공존하는 브라우저에서 **주최자가 자기 리그를 수정하려다 403을 받습니다.** 헤더(`Authorization: Bearer`)로만 테스트하면 드러나지 않습니다. 같은 이유로 §5·§6의 소유권 라우트도 각각 `HOST`/`PLAYER`를 함께 선언해야 합니다.
+
 > **(v6) A-8은 한 화면에서 리그 정보와 입금 계좌를 함께 저장합니다.** 계좌가 별도 엔티티(§3)라 저장 경로가 둘로 갈리므로, **프론트가 두 번 호출**합니다.
 >
 > - 계좌 수정: `PATCH /banks/:id`(계좌 3필드) → `PATCH /leagues/:id`(나머지)
@@ -419,7 +430,9 @@
 >
 > 서버에 합성 엔드포인트를 두지 않는 이유는 `banks`가 리그 소유가 아니기 때문입니다(§3 확정) — 리그 수정 권한으로 남의 계좌를 고칠 수 있게 되면 안 됩니다.
 
-**`GET /api/v1/leagues/:id/dashboard` Response** — **(v6)** A-2 홈
+**`GET /api/v1/leagues/:id/dashboard` Response** — **(v6)** A-2 홈 · **(v6.3) 미구현**
+
+> **(v6.3) 이 엔드포인트만 아직 구현되지 않았습니다.** 응답이 `GameSummaryDto`(§5)와 `ReservationSummaryDto`(§6)를 담는데, 두 DTO는 Games·Reservations 모듈 소속이라 지금 만들면 그쪽 구현에서 다시 손보게 됩니다. **§6(Reservations)까지 끝난 뒤에 추가합니다.**
 
 ```tsx
 {
