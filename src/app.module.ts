@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { BankModule } from './bank/bank.module';
 import { buildDataSourceOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
+import { LeagueModule } from './league/league.module';
 import { UserModule } from './user/user.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { UserModule } from './user/user.module';
     AuthModule,
     BankModule,
     HealthModule,
+    LeagueModule,
     UserModule,
   ],
   controllers: [AppController],

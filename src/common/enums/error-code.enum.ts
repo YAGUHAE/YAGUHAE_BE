@@ -29,4 +29,8 @@ export enum ErrorCode {
   // --- bank ---
   /** 하나 이상의 League가 이 계좌를 참조 중이라 삭제할 수 없음 */
   BANK_IN_USE = 'BANK_IN_USE',
+
+  // --- league ---
+  /** 리그가 참조하려는 계좌가 존재하지 않음 */
+  BANK_NOT_FOUND = 'BANK_NOT_FOUND',
 }

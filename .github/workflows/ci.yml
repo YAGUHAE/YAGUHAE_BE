@@ -73,6 +73,12 @@ jobs:
       - name: 단위 테스트
         run: pnpm test
 
+      # e2e가 실제 스키마를 쓴다. 이 단계가 없으면 DB를 조회하는 테스트가
+      # relation does not exist 로 깨진다. 덤으로 마이그레이션 자체가 매 PR에서
+      # 검증된다 — 이전에는 CI가 마이그레이션을 한 번도 실행하지 않았다.
+      - name: 마이그레이션 실행
+        run: pnpm migration:run
+
       - name: E2E 테스트
         run: pnpm test:e2e
 
