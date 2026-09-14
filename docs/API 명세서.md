@@ -7,6 +7,7 @@
 > - **최종 수정일:** 2026-09-14
 > - **기반 문서:** ERD + 상태머신 (NestJS + TypeORM 재정비판 **v4**) · 화면설계서(용병 v1 · 리그 어드민 v2.1) · 라우팅 설계 v1
 > - **범위:** REST 엔드포인트, 요청/응답 DTO, Guard 권한, 에러 케이스
+> - **v6.3 반영 (Banks 구현):** §3의 요청·응답 계약을 구현에 맞춰 확정했습니다 — `BankDto` 필드, `GET /banks`의 `{ items }` 형태, `PATCH` 요청 계약, `409 BANK_IN_USE`의 `detail.leagueCount`.
 > - **v6.3 반영 (사용자 식별자 타입):** `users.id`가 uuid에서 자동 증가 정수로 바뀌었습니다. 응답·요청에서 **사용자 id 계열만 `number`**이고 나머지 리소스 id는 `string`(uuid) 그대로입니다 — §0.3 신설, §2·§4·§7 DTO 반영.
 > - **v6 반영 (화면설계서 동기화):** 화면설계서에서 확정된 사항 일부가 이 문서에 반영되지 않아, 이대로 구현하면 **P-4·P-5·P-8·A-5·A-7이 구현 불가능**한 상태였습니다(집계만으로는 포지션 보드를 그릴 수 없고, 자리마다 참가자 이름을 받을 곳이 없음). 이번 개정에서 맞춥니다 — ① 자리별 참가자 이름(`slots[].participantName`), ② `GameDetailDto.positions[].slots[]` **자리 단위 응답**, ③ **급수 제한 폐지**(`requiredLevel` → `recommendedLevel`, `LEVEL_NOT_ELIGIBLE` 삭제 — 화면설계서 §3.3), ④ 예약 상태 이력(`ReservationDto.history[]`), ⑤ 종료 예약의 **자리 스냅샷 보존**, ⑥ 어드민 전용 엔드포인트 4종(리그 대시보드 · 리그 경기 목록 · 리그 예약 목록 · 자리 단위 일괄 출석), ⑦ 평가 대상 참가자 목록, ⑧ 거절 사유, ⑨ 목록 응답 DTO 2종(`GameSummaryDto`·`ReservationSummaryDto`), ⑩ 인증 토큰 전달 방식(httpOnly 쿠키)과 신규 유저 분기, ⑪ `FeeTier` 신설과 리그 티어별 기본 참가비.
 > - **v6가 요구하는 ERD 변경:** `game_position_slot.participant_name`(신규) · `reservation_slot_snapshot`(신규, 또는 `reservations.slots_snapshot` JSONB) · `reservation_status_history`(신규 테이블) · `game_positions.fee_tier` · `leagues.intro` · `leagues.default_fees` · `games.notice` · `games.dugout_home`/`dugout_away` · `games.stadium_name`(nullable — 리그값 override) · `games.required_level` → `recommended_level`(검증 없음). **ERD 문서에 아직 반영되지 않았습니다.**
@@ -270,6 +271,32 @@
 | PATCH | `/api/v1/banks/:id` | JwtAuthGuard + RolesGuard('HOST') | 계좌 정보 수정 |
 | DELETE | `/api/v1/banks/:id` | JwtAuthGuard + RolesGuard('HOST') | 계좌 삭제 (참조 중인 리그 있으면 거부) |
 
+**`BankDto`** — **(v6.3) 필드 확정**
+
+```tsx
+{
+  id: string;          // uuid
+  bankName: string;
+  account: string;     // 입력한 표기 그대로 (하이픈 포함 여부까지)
+  holder: string;
+}
+```
+
+> **(v6.3) 계좌번호를 마스킹하지 않습니다.** 이 DTO를 보는 쪽은 계좌를 관리하는 HOST이거나 입금해야 하는 신청자(`LeagueDto.bank`·`GameDetailDto.league.bank`)이고, 둘 다 전체 번호가 필요합니다.
+
+> **(v6.3) 표기를 정규화하지 않습니다.** 하이픈을 지워 저장하면 다시 그릴 때 은행별 자릿수 규칙을 서버가 알아야 합니다. 입금하는 사람이 눈으로 대조하기에도 입력 그대로가 낫습니다.
+
+> **(v6.3) `createdAt`은 응답에 없습니다.** 목록 정렬(최신 등록 순)에만 쓰고 내려주지 않습니다.
+
+**`GET /api/v1/banks`**
+
+```tsx
+// Response
+{ items: BankDto[] }   // (v6.3) 최신 등록 순
+```
+
+> **(v6.3) 배열을 그대로 내려주지 않고 `items`로 감쌉니다.** 나중에 페이지네이션·집계를 붙일 때 배열 응답은 계약을 깨야만 확장할 수 있습니다(§5·§6의 목록 응답도 같은 형태입니다).
+
 **`POST /api/v1/banks`**
 
 ```tsx
@@ -278,11 +305,34 @@
 // Response: BankDto
 ```
 
-에러: `403 FORBIDDEN` (role ≠ HOST)
+에러: `403 FORBIDDEN` (role ≠ HOST), `422 VALIDATION_FAILED`
 
-**`DELETE /api/v1/banks/:id`**
+**`PATCH /api/v1/banks/:id`** — **(v6.3) 요청 계약 신설**
 
-에러: `409 BANK_IN_USE` (하나 이상의 League가 이 bank_id를 참조 중)
+```tsx
+// Request (부분 업데이트, 세 필드 모두 선택)
+{ bankName?: string; account?: string; holder?: string }
+// Response: BankDto
+```
+
+에러: `404 NOT_FOUND`, `422 VALIDATION_FAILED`
+
+> **(v6.3) 빈 객체도 200입니다.** 응답이 항상 현재 계좌이므로 아무것도 바뀌지 않은 요청이 에러일 이유가 없습니다.
+
+**`DELETE /api/v1/banks/:id`** — 성공 시 `204 No Content`
+
+에러: `404 NOT_FOUND`, `409 BANK_IN_USE` (하나 이상의 League가 이 bank_id를 참조 중)
+
+```tsx
+// 409 BANK_IN_USE
+{ code: 'BANK_IN_USE', detail: { leagueCount: number } }   // (v6.3)
+```
+
+> **(v6.3) `leagueCount`를 싣습니다.** 몇 개가 막고 있는지 알아야 어드민이 어디를 먼저 고칠지 판단할 수 있습니다.
+
+> **(v6.3) `leagues.bank_id`가 nullable이라 DB가 대신 막아주지 않습니다.** FK가 `ON DELETE SET NULL`이었다면 리그가 조용히 계좌를 잃고, 신청자에게 입금할 곳을 안내하지 못하게 됩니다. 그래서 서비스에서 참조를 세어 거절합니다.
+
+> **(v6.3) `:id`가 uuid가 아니면 400입니다**(`ParseUUIDPipe` — §0.3).
 
 ---
 
